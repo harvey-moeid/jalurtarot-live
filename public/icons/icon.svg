@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Background -->
+  <rect width="512" height="512" fill="#080808"/>
+  <!-- Outer circle -->
+  <circle cx="256" cy="256" r="230" fill="none" stroke="#c9a84c" stroke-width="2" opacity="0.4"/>
+  <!-- Inner circle -->
+  <circle cx="256" cy="256" r="180" fill="none" stroke="#c9a84c" stroke-width="1" opacity="0.2"/>
+  <!-- Star / Pentagram shape -->
+  <path d="M256 80 L290 185 L400 185 L315 250 L348 355 L256 290 L164 355 L197 250 L112 185 L222 185 Z"
+    fill="none" stroke="#c9a84c" stroke-width="2" opacity="0.6"/>
+  <!-- Center diamond -->
+  <path d="M256 206 L286 256 L256 306 L226 256 Z" fill="#c9a84c" opacity="0.9"/>
+  <!-- Corner dots -->
+  <circle cx="256" cy="120" r="4" fill="#c9a84c" opacity="0.7"/>
+  <circle cx="392" cy="392" r="3" fill="#c9a84c" opacity="0.4"/>
+  <circle cx="120" cy="392" r="3" fill="#c9a84c" opacity="0.4"/>
+  <!-- JT text area - subtle -->
+  <text x="256" y="430" text-anchor="middle" font-family="serif" font-size="28" fill="#c9a84c" opacity="0.8" letter-spacing="12">JT</text>
+</svg>

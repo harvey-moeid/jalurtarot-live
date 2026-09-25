@@ -1,0 +1,15 @@
+{
+  "name": "jalurtarot-tiktok-listener",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Bot pendengar TikTok Live untuk Ramalan Live Jalur Tarot — deteksi gift, trigger tarik kartu ke Worker",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "tiktok-live-connector": "^2.0.0",
+    "dotenv": "^16.4.5"
+  }
+}

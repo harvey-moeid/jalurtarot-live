@@ -1,0 +1,33 @@
+{
+  "name": "Jalur Tarot",
+  "short_name": "Jalur Tarot",
+  "description": "Baca kartu takdirmu. Deck Rider-Waite-Smith lengkap dengan interpretasi mendalam.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#080808",
+  "theme_color": "#c9a84c",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "/cards/major/00-fool.jpg",
+      "sizes": "300x500",
+      "type": "image/jpeg"
+    }
+  ],
+  "categories": ["lifestyle", "entertainment"],
+  "lang": "id"
+}

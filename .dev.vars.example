@@ -1,0 +1,9 @@
+# Salin file ini ke .dev.vars untuk development lokal
+# .dev.vars JANGAN di-commit ke Git
+
+# Password untuk /admin
+ADMIN_PASSWORD=ganti-dengan-password-kamu
+
+# Token rahasia untuk POST /api/live/trigger (dipakai bot TikTok listener,
+# lihat header X-Live-Secret). Buat token acak, contoh: openssl rand -hex 24
+LIVE_SECRET=ganti-dengan-token-acak

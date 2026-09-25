@@ -1,0 +1,50 @@
+name = "jalurtarotfree"
+main = "src/index.ts"
+compatibility_date = "2025-04-01"
+compatibility_flags = ["nodejs_compat"]
+
+# Static assets — Cloudflare otomatis serve file di folder ini
+# sebelum request masuk ke Worker
+[assets]
+directory = "./public"
+binding = "ASSETS"
+not_found_handling = "none"
+
+[[kv_namespaces]]
+binding = "RATE_LIMIT_KV"
+id = "217d91b266db4ded99680b61b5b0183c"
+preview_id = "217d91b266db4ded99680b61b5b0183c"
+
+[observability]
+enabled = true
+head_sampling_rate = 1
+
+[observability.logs]
+enabled = true
+head_sampling_rate = 1
+persist = true
+invocation_logs = true
+
+[observability.traces]
+enabled = false
+persist = true
+head_sampling_rate = 1
+
+[vars]
+# Tidak ada var publik yang dibutuhkan lagi — Ramalan Live 100% offline/statis,
+# tanpa AI/LLM, tanpa API key eksternal.
+
+# ── Admin Panel ──
+# Password untuk halaman /admin — simpan sebagai secret, JANGAN di sini.
+#
+#   wrangler secret put ADMIN_PASSWORD          ← Password admin panel (WAJIB sebelum deploy)
+#
+# ── Ramalan Live (TikTok) ──
+# Token rahasia yang harus dikirim bot Node.js (tiktok-listener/) di header
+# X-Live-Secret setiap kali memanggil POST /api/live/trigger. Isi bebas,
+# cukup panjang & acak (contoh: buat dengan `openssl rand -hex 24`).
+#
+#   wrangler secret put LIVE_SECRET             ← Token rahasia trigger live (WAJIB untuk fitur live)
+#
+# Untuk dev lokal: taruh ADMIN_PASSWORD + LIVE_SECRET di file .dev.vars (jangan di-commit!)
+
