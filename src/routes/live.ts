@@ -120,7 +120,7 @@ body{align-items:flex-start;padding:12px;padding-top:max(12px,env(safe-area-inse
 <body>
 <main id="stage" aria-live="polite">
   <div class="kicker"><img class="kicker-mark" src="/icons/live-spark.svg" alt="" aria-hidden="true"/><span>Jalur Tarot - Live Reading</span></div>
-  <div class="viewer" id="viewer"></div>
+  <div class="viewer" id="viewer">Menunggu pembacaan live...</div>
   <div class="gift" id="gift" hidden></div>
   <div class="cards-row" id="cards-row"></div>
   <div class="summary" id="summary"></div>
@@ -146,7 +146,7 @@ body{align-items:flex-start;padding:12px;padding-top:max(12px,env(safe-area-inse
         (c.isReversed?'<div class="state">terbalik</div>':"")+
         '</article>';
     }).join("");
-    summary.innerHTML=md(draw.summary||"");
+    summary.innerHTML=md(draw.summary||"Pembacaan sedang diproses...");
     stage.classList.remove("show"); void stage.offsetWidth; stage.classList.add("show");
     if(hideTimer)clearTimeout(hideTimer);
     hideTimer=setTimeout(function(){stage.classList.remove("show")},HIDE_AFTER_MS);
@@ -156,7 +156,7 @@ body{align-items:flex-start;padding:12px;padding-top:max(12px,env(safe-area-inse
       var res=await fetch("/api/live/state",{cache:"no-store"});
       if(!res.ok)throw new Error("state "+res.status);
       var data=await res.json();
-      if(data.draw&&data.draw.id!==lastId){lastId=data.draw.id;render(data.draw)}
+      if(data.draw){if(data.draw.id!==lastId){lastId=data.draw.id;render(data.draw)}}
     }catch(e){}
     setTimeout(poll,2000);
   }
