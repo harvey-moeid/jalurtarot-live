@@ -1,22 +1,16 @@
 /**
- * Jalur Tarot — Bot Pendengar TikTok Live
+ * Jalur Tarot - Bot Pendengar TikTok Live
  *
- * Jalan terpisah dari Worker (misalnya di Termux HP kamu). Tugasnya:
- *   1. Konek ke live TikTok kamu (tanpa login, cukup username).
- *   2. Dengarkan event "gift".
- *   3. Kalau gift-nya cocok dengan TARGET_GIFT_NAME di .env → panggil
- *      POST /api/live/trigger ke Worker, yang akan menarik kartu &
- *      menampilkannya di overlay OBS (/live).
+ * Listener berjalan terpisah dari Cloudflare Worker, misalnya di Termux.
+ * Tugas:
+ *   1. Terhubung ke live TikTok berdasarkan username.
+ *   2. Mendengarkan event gift.
+ *   3. Mengirim gift yang cocok ke POST /api/live/trigger.
  *
  * Jalankan:
  *   npm install
- *   cp .env.example .env   (lalu isi sesuai punyamu)
+ *   cp .env.example .env
  *   npm start
- *
- * Biar tetap jalan di HP walau layar mati (Termux):
- *   termux-wake-lock
- *   npm start
- * (atau pakai pm2 / tmux supaya bisa ditinggal)
  */
 
 import 'dotenv/config';
@@ -33,100 +27,242 @@ const {
   SIGN_API_KEY = '',
 } = process.env;
 
-function requireEnv(name, val) {
-  if (!val) {
-    console.error(`❌ ${name} belum diisi di file .env — lihat .env.example`);
+function requireEnv(name, value) {
+  if (!value?.trim()) {
+    console.error(`ERROR: ${name} belum diisi di file .env - lihat .env.example`);
     process.exit(1);
   }
 }
+
 requireEnv('TIKTOK_USERNAME', TIKTOK_USERNAME);
 requireEnv('WORKER_URL', WORKER_URL);
 requireEnv('LIVE_SECRET', LIVE_SECRET);
 requireEnv('TARGET_GIFT_NAME', TARGET_GIFT_NAME);
 
-const minGiftCount = parseInt(MIN_GIFT_COUNT, 10) || 1;
-const threeCardThreshold = THREE_CARD_THRESHOLD ? parseInt(THREE_CARD_THRESHOLD, 10) : null;
+const username = TIKTOK_USERNAME.trim().replace(/^@+/, '');
+const workerUrl = WORKER_URL.trim().replace(/\/+$/, '');
 const targetGiftLower = TARGET_GIFT_NAME.trim().toLowerCase();
 
-console.log('✦ Jalur Tarot — Bot TikTok Live ✦');
-console.log(`  Akun target   : @${TIKTOK_USERNAME}`);
-console.log(`  Worker        : ${WORKER_URL}`);
-console.log(`  Gift pemicu   : "${TARGET_GIFT_NAME}" (min ${minGiftCount}x)`);
-console.log(`  Spread default: ${DEFAULT_SPREAD}${threeCardThreshold ? ` (jadi three-card jika >= ${threeCardThreshold}x)` : ''}`);
+const minGiftCount = Number.parseInt(MIN_GIFT_COUNT, 10);
+const threeCardThreshold = THREE_CARD_THRESHOLD.trim()
+  ? Number.parseInt(THREE_CARD_THRESHOLD, 10)
+  : null;
+
+if (!Number.isInteger(minGiftCount) || minGiftCount < 1) {
+  console.error('ERROR: MIN_GIFT_COUNT harus berupa angka >= 1.');
+  process.exit(1);
+}
+
+if (threeCardThreshold !== null && (!Number.isInteger(threeCardThreshold) || threeCardThreshold < 1)) {
+  console.error('ERROR: THREE_CARD_THRESHOLD harus berupa angka >= 1 atau dikosongkan.');
+  process.exit(1);
+}
+
+const defaultSpread = DEFAULT_SPREAD === 'three-card' ? 'three-card' : 'single';
+
+console.log('Jalur Tarot - Bot TikTok Live');
+console.log(`  Akun target    : @${username}`);
+console.log(`  Worker         : ${workerUrl}`);
+console.log(`  Gift pemicu    : "${TARGET_GIFT_NAME.trim()}" (min ${minGiftCount}x)`);
+console.log(`  Spread default : ${defaultSpread}`);
+if (threeCardThreshold) {
+  console.log(`  Three-card     : otomatis jika >= ${threeCardThreshold}x`);
+}
 console.log('');
 
-async function triggerDraw({ username, giftName, giftCount, spreadId }) {
-  try {
-    const res = await fetch(`${WORKER_URL}/api/live/trigger`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Live-Secret': LIVE_SECRET,
-      },
-      body: JSON.stringify({ username, giftName, giftCount, spreadId }),
-    });
+let connection;
+let reconnectTimer = null;
+let reconnecting = false;
+let shuttingDown = false;
+let connected = false;
 
-    if (!res.ok) {
-      const text = await res.text().catch(() => '');
-      console.error(`⚠️  Worker menolak trigger (${res.status}): ${text}`);
-      return;
+// Simpan trigger singkat untuk mencegah event yang sama memicu draw berulang.
+// TTL pendek agar gift baru tetap dapat diproses.
+const recentTriggers = new Map();
+const DEDUPE_TTL_MS = 15000;
+
+function scheduleReconnect(delayMs, reason) {
+  if (shuttingDown || reconnectTimer || reconnecting) return;
+
+  console.log(`RECONNECT: ${reason} Mencoba lagi dalam ${Math.ceil(delayMs / 1000)} detik...`);
+  reconnectTimer = setTimeout(() => {
+    reconnectTimer = null;
+    void connectWithRetry();
+  }, delayMs);
+}
+
+function makeTriggerKey({ username: sender, giftName, giftCount }) {
+  return `${sender}|\${giftName}|\${giftCount}`.toLowerCase();
+}
+
+function isDuplicateTrigger(key) {
+  const now = Date.now();
+
+  for (const [storedKey, timestamp] of recentTriggers) {
+    if (now - timestamp > DEDUPE_TTL_MS) {
+      recentTriggers.delete(storedKey);
     }
-    const data = await res.json();
-    console.log(`🔮 Kartu ditarik untuk ${username}: ${data.draw?.cards?.map((c) => c.nameCn).join(', ')}`);
-  } catch (err) {
-    console.error('⚠️  Gagal menghubungi Worker:', err.message);
   }
+
+  if (recentTriggers.has(key)) return true;
+
+  recentTriggers.set(key, now);
+  return false;
 }
 
 function pickSpread(giftCount) {
   if (threeCardThreshold && giftCount >= threeCardThreshold) return 'three-card';
-  return DEFAULT_SPREAD === 'three-card' ? 'three-card' : 'single';
+  return defaultSpread;
 }
 
-async function main() {
-  const connection = new TikTokLiveConnection(TIKTOK_USERNAME, {
-    signApiKey: SIGN_API_KEY || undefined,
-  });
+async function triggerDraw({ sender, giftName, giftCount, spreadId }) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 10000);
 
+  try {
+    const res = await fetch(`${workerUrl}/api/live/trigger`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Live-Secret': LIVE_SECRET.trim(),
+      },
+      body: JSON.stringify({
+        username: sender,
+        giftName,
+        giftCount,
+        spreadId,
+      }),
+      signal: controller.signal,
+    });
+
+    const responseText = await res.text().catch(() => '');
+
+    if (!res.ok) {
+      console.error(`WORKER ERROR: trigger ditolak (${res.status})${responseText ? ` - ${responseText.slice(0, 300)}` : ''}`);
+      return false;
+    }
+
+    let data = null;
+    try {
+      data = responseText ? JSON.parse(responseText) : null;
+    } catch {
+      console.error('WORKER ERROR: respons bukan JSON yang valid.');
+      return false;
+    }
+
+    const cards = data?.draw?.cards?.map((card) => card.nameCn).filter(Boolean).join(', ') || '-';
+    console.log(`DRAW OK: ${sender} -> ${cards}`);
+    return true;
+  } catch (err) {
+    if (err?.name === 'AbortError') {
+      console.error('WORKER ERROR: request timeout setelah 10 detik.');
+    } else {
+      console.error(`WORKER ERROR: gagal menghubungi Worker - ${err?.message || err}`);
+    }
+    return false;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+function attachListeners() {
   connection.on(WebcastEvent.GIFT, (data) => {
-    // Gift "streakable" (giftType === 1) bisa dikirim berkali-kali dalam satu combo.
-    // Tunggu combo selesai (repeatEnd) baru dihitung, biar gak trigger berkali-kali.
+    // Gift streakable dikirim berkali-kali dalam satu combo.
+    // Tunggu repeatEnd agar satu combo tidak memicu banyak draw.
     if (data.giftType === 1 && !data.repeatEnd) return;
 
-    const giftName = (data.giftName || '').trim();
-    const giftCount = data.repeatCount || 1;
-    const username = data.user?.uniqueId || data.uniqueId || 'Penonton';
+    const giftName = String(data.giftName || '').trim();
+    const giftCount = Number(data.repeatCount) || 1;
+    const sender = String(data.user?.uniqueId || data.uniqueId || 'Penonton').trim() || 'Penonton';
 
     if (giftName.toLowerCase() !== targetGiftLower) return;
     if (giftCount < minGiftCount) return;
 
-    console.log(`🎁 ${username} mengirim ${giftName} x${giftCount}`);
-    triggerDraw({ username, giftName, giftCount, spreadId: pickSpread(giftCount) });
+    const key = makeTriggerKey({ sender, giftName, giftCount });
+    if (isDuplicateTrigger(key)) {
+      console.log(`DUPLICATE: ${sender} - ${giftName} x${giftCount} diabaikan.`);
+      return;
+    }
+
+    console.log(`GIFT: ${sender} mengirim ${giftName} x${giftCount}`);
+    void triggerDraw({
+      sender,
+      giftName,
+      giftCount,
+      spreadId: pickSpread(giftCount),
+    });
   });
 
   connection.on(WebcastEvent.CONNECTED, (state) => {
-    console.log(`✅ Terhubung ke live @${TIKTOK_USERNAME} (roomId: ${state.roomId})`);
+    connected = true;
+    console.log(`CONNECTED: @${username} (roomId: ${state.roomId})`);
   });
 
   connection.on(WebcastEvent.DISCONNECTED, () => {
-    console.log('⚠️  Terputus dari live. Mencoba sambung ulang dalam 10 detik...');
-    setTimeout(connectWithRetry, 10000);
+    if (shuttingDown) return;
+
+    connected = false;
+    console.log('DISCONNECTED: koneksi TikTok terputus.');
+    scheduleReconnect(10000, 'Koneksi terputus.');
   });
 
   connection.on(WebcastEvent.ERROR, (err) => {
-    console.error('⚠️  Error koneksi:', err?.message || err);
+    console.error(`CONNECTION ERROR: ${err?.message || err}`);
+  });
+}
+
+async function connectWithRetry() {
+  if (shuttingDown || reconnecting || connected) return;
+
+  reconnecting = true;
+
+  try {
+    await connection.connect();
+  } catch (err) {
+    connected = false;
+    console.error(`CONNECT FAILED: @${username} belum terhubung. ${err?.message || err}`);
+    scheduleReconnect(15000, 'Percobaan koneksi gagal.');
+  } finally {
+    reconnecting = false;
+  }
+}
+
+async function shutdown(signal) {
+  if (shuttingDown) return;
+
+  shuttingDown = true;
+  if (reconnectTimer) {
+    clearTimeout(reconnectTimer);
+    reconnectTimer = null;
+  }
+
+  console.log(`SHUTDOWN: menerima ${signal}, menghentikan listener...`);
+
+  try {
+    if (connection?.disconnect) {
+      await connection.disconnect();
+    }
+  } catch (err) {
+    console.error(`SHUTDOWN ERROR: ${err?.message || err}`);
+  } finally {
+    process.exit(0);
+  }
+}
+
+async function main() {
+  connection = new TikTokLiveConnection(username, {
+    signApiKey: SIGN_API_KEY?.trim() || undefined,
   });
 
-  async function connectWithRetry() {
-    try {
-      await connection.connect();
-    } catch (err) {
-      console.error(`❌ Gagal konek (mungkin @${TIKTOK_USERNAME} sedang tidak live). Coba lagi 15 detik...`, err.message);
-      setTimeout(connectWithRetry, 15000);
-    }
-  }
+  attachListeners();
+
+  process.once('SIGINT', () => void shutdown('SIGINT'));
+  process.once('SIGTERM', () => void shutdown('SIGTERM'));
 
   await connectWithRetry();
 }
 
-main();
+main().catch((err) => {
+  console.error(`FATAL: ${err?.message || err}`);
+  process.exit(1);
+});
