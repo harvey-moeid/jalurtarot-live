@@ -1,4 +1,4 @@
-name = "jalurtarotfree"
+name = "jalurtarot-live"
 main = "src/index.ts"
 compatibility_date = "2025-04-01"
 compatibility_flags = ["nodejs_compat"]
@@ -12,8 +12,8 @@ not_found_handling = "none"
 
 [[kv_namespaces]]
 binding = "RATE_LIMIT_KV"
-id = "217d91b266db4ded99680b61b5b0183c"
-preview_id = "217d91b266db4ded99680b61b5b0183c"
+id = "2545355c3b6e4012a1bddf0c66c181a0"
+preview_id = "2545355c3b6e4012a1bddf0c66c181a0"
 
 [observability]
 enabled = true
@@ -34,17 +34,16 @@ head_sampling_rate = 1
 # Tidak ada var publik yang dibutuhkan lagi — Ramalan Live 100% offline/statis,
 # tanpa AI/LLM, tanpa API key eksternal.
 
-# ── Admin Panel ──
+# —— Admin Panel ——
 # Password untuk halaman /admin — simpan sebagai secret, JANGAN di sini.
 #
-#   wrangler secret put ADMIN_PASSWORD          ← Password admin panel (WAJIB sebelum deploy)
+#   wrangler secret put ADMIN_PASSWORD          → Password admin panel (WAJIB sebelum deploy)
 #
-# ── Ramalan Live (TikTok) ──
+# —— Ramalan Live (TikTok) ——
 # Token rahasia yang harus dikirim bot Node.js (tiktok-listener/) di header
 # X-Live-Secret setiap kali memanggil POST /api/live/trigger. Isi bebas,
 # cukup panjang & acak (contoh: buat dengan `openssl rand -hex 24`).
 #
-#   wrangler secret put LIVE_SECRET             ← Token rahasia trigger live (WAJIB untuk fitur live)
+#   wrangler secret put LIVE_SECRET             → Token rahasia trigger live (WAJIB untuk fitur live)
 #
 # Untuk dev lokal: taruh ADMIN_PASSWORD + LIVE_SECRET di file .dev.vars (jangan di-commit!)
-
