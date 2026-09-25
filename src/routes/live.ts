@@ -1,166 +1,102 @@
-import { Hono } from 'hono';
-import type { Env as ApiEnv } from './api';
-import { generateLiveDraw, getLiveDraw, saveLiveDraw, type LiveSpreadId } from '../lib/live';
-
-export type LiveEnv = ApiEnv & {
-  // Token rahasia yang harus dikirim bot TikTok listener di header X-Live-Secret.
-  // Set via: wrangler secret put LIVE_SECRET
-  LIVE_SECRET?: string;
-};
-
-const live = new Hono<{ Bindings: LiveEnv }>();
-
-function isValidSpreadId(v: unknown): v is LiveSpreadId {
-  return v === 'single' || v === 'three-card';
-}
-
-// ══════════════════════════════════════════════════════════
-// POST /api/live/trigger — dipanggil oleh bot Node.js TikTok listener
-// ══════════════════════════════════════════════════════════
-live.post('/trigger', async (c) => {
-  const expectedSecret = (c.env.LIVE_SECRET || '').trim();
-  const givenSecret = (c.req.header('X-Live-Secret') || '').trim();
-
-  if (!expectedSecret) {
-    return c.json({ error: 'LIVE_SECRET belum di-set di server. Jalankan: wrangler secret put LIVE_SECRET' }, 500 as any);
-  }
-  if (!givenSecret || givenSecret !== expectedSecret) {
-    return c.json({ error: 'Unauthorized — X-Live-Secret salah/kosong' }, 401 as any);
-  }
-
-  let body: any;
-  try { body = await c.req.json(); }
-  catch { return c.json({ error: 'Format JSON tidak valid' }, 400 as any); }
-
-  const spreadId: LiveSpreadId = isValidSpreadId(body.spreadId) ? body.spreadId : 'single';
-  const username: string = typeof body.username === 'string' ? body.username.slice(0, 60) : 'Penonton';
-  const giftName: string | undefined = typeof body.giftName === 'string' ? body.giftName.slice(0, 60) : undefined;
-  const giftCount: number | undefined = typeof body.giftCount === 'number' ? body.giftCount : undefined;
-
-  const draw = generateLiveDraw(spreadId, username, giftName, giftCount);
-  await saveLiveDraw(c.env, draw);
-
-  return c.json({ ok: true, draw });
-});
-
-// ══════════════════════════════════════════════════════════
-// GET /api/live/state — di-poll halaman overlay tiap beberapa detik
-// ══════════════════════════════════════════════════════════
-live.get('/state', async (c) => {
-  const draw = await getLiveDraw(c.env);
-  return c.json({ draw });
-});
-
-export default live;
-
-// ══════════════════════════════════════════════════════════
-// GET /live — halaman overlay untuk OBS Browser Source
-// Latar transparan, tanpa navigasi, auto-update via polling.
-// ══════════════════════════════════════════════════════════
-export function liveOverlayPage(): string {
+{"text":"import { Hono } from 'hono';\nimport type { Env as ApiEnv } from './api';\nimport { generateLiveDraw, getLiveDraw, saveLiveDraw, type LiveSpreadId } from '../lib/live';\n\nexport type LiveEnv = ApiEnv & {\n  // Token rahasia yang harus dikirim bot TikTok listener di header X-Live-Secret.\n  // Set via: wrangler secret put LIVE_SECRET\n  LIVE_SECRET?: string;\n};\n\nconst live = new Hono<{ Bindings: LiveEnv }>();\n\nfunction isValidSpreadId(v: unknown): v is LiveSpreadId {\n  return v === 'single' || v === 'three-card';\n}\n\n// ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ\n// POST /api/live/trigger â dipanggil oleh bot Node.js TikTok listener\n// ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ\nlive.post('/trigger', async (c) => {\n  const expectedSecret = (c.env.LIVE_SECRET || '').trim();\n  const givenSecret = (c.req.header('X-Live-Secret') || '').trim();\n\n  if (!expectedSecret) {\n    return c.json({ error: 'LIVE_SECRET belum di-set di server. Jalankan: wrangler secret put LIVE_SECRET' }, 500 as any);\n  }\n  if (!givenSecret || givenSecret !== expectedSecret) {\n    return c.json({ error: 'Unauthorized â X-Live-Secret salah/kosong' }, 401 as any);\n  }\n\n  let body: any;\n  try { body = await c.req.json(); }\n  catch { return c.json({ error: 'Format JSON tidak valid' }, 400 as any); }\n\n  const spreadId: LiveSpreadId = isValidSpreadId(body.spreadId) ? body.spreadId : 'single';\n  const username: string = typeof body.username === 'string' ? body.username.slice(0, 60) : 'Penonton';\n  const giftName: string | undefined = typeof body.giftName === 'string' ? body.giftName.slice(0, 60) : undefined;\n  const giftCount: number | undefined = typeof body.giftCount === 'number' ? body.giftCount : undefined;\n\n  const draw = generateLiveDraw(spreadId, username, giftName, giftCount);\n  await saveLiveDraw(c.env, draw);\n\n  return c.json({ ok: true, draw });\n});\n\n// ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ\n// GET /api/live/state â di-poll halaman overlay tiap beberapa detik\n// ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ\nlive.get('/state', async (c) => {\n  const draw = await getLiveDraw(c.env);\n  return c.json({ draw });\n});\n\nexport default live;\n\n// ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ\n// GET /live â halaman overlay untuk OBS Browser Source\n// Latar transparan, tanpa navigasi, auto-update via polling.\n// ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ\nexport function liveOverlayPage(): string {
   return `<!DOCTYPE html>
 <html lang="id">
 <head>
 <meta charset="UTF-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>Jalur Tarot — Live Overlay</title>
-<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600&family=Cormorant+Garamond:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet"/>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
+<meta name="theme-color" content="#08070b"/>
+<title>Jalur Tarot — Live</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700&family=Cormorant+Garamond:wght@400;500;600&display=swap" rel="stylesheet"/>
 <style>
-  * { margin:0; padding:0; box-sizing:border-box; }
-  html, body { background: transparent; overflow: hidden; width:100%; height:100%; }
-  body {
-    font-family:'Cormorant Garamond', serif;
-    color:#ede8de;
-    display:flex; align-items:center; justify-content:center;
-    min-height:100vh;
-  }
-  #stage { display:none; text-align:center; max-width:900px; padding:2rem; }
-  #stage.show { display:block; animation: fadeIn 0.6s ease; }
-  @keyframes fadeIn { from { opacity:0; transform:translateY(16px);} to {opacity:1; transform:translateY(0);} }
-  .headline {
-    font-family:'Cinzel', serif; letter-spacing:0.15em; font-size:1.1rem;
-    color:#c8a84b; text-shadow: 0 2px 12px rgba(0,0,0,0.8); margin-bottom:1.2rem;
-  }
-  .cards-row { display:flex; gap:1.4rem; justify-content:center; margin-bottom:1.4rem; flex-wrap:wrap; }
-  .live-card { width:150px; }
-  .live-card img {
-    width:150px; height:230px; object-fit:cover; border-radius:8px;
-    border:2px solid #c8a84b; box-shadow:0 8px 30px rgba(0,0,0,0.7);
-    transition: transform 0.4s ease;
-  }
-  .live-card.reversed img { transform: rotate(180deg); }
-  .live-card .pos { font-family:'Cinzel',serif; font-size:0.65rem; letter-spacing:0.15em; color:#c8a84b; margin-top:0.5rem; text-shadow:0 2px 8px rgba(0,0,0,0.8); }
-  .live-card .name { font-size:1rem; margin-top:0.15rem; text-shadow:0 2px 8px rgba(0,0,0,0.9); }
-  .summary {
-    font-size:1.15rem; line-height:1.6; white-space:pre-wrap;
-    background:rgba(5,5,7,0.55); border:1px solid rgba(200,168,75,0.35);
-    border-radius:12px; padding:1.2rem 1.6rem; text-shadow:0 2px 8px rgba(0,0,0,0.9);
-    backdrop-filter: blur(3px);
-  }
-  .summary strong { color:#c8a84b; }
+:root{--bg:#08070b;--panel:rgba(20,17,24,.82);--gold:#d9b45a;--gold2:#f0d58a;--cream:#f5f0e7;--muted:#a9a19a;--line:rgba(217,180,90,.24);--shadow:0 24px 70px rgba(0,0,0,.42)}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;min-height:100%;background:transparent}
+body{font-family:"Cormorant Garamond",serif;color:var(--cream);display:flex;align-items:center;justify-content:center;padding:clamp(12px,3vw,32px);overflow-x:hidden}
+#stage{width:min(960px,100%);display:none;position:relative;padding:clamp(18px,4vw,34px);border:1px solid var(--line);border-radius:28px;background:linear-gradient(145deg,rgba(15,12,20,.92),rgba(7,6,10,.76));box-shadow:var(--shadow),inset 0 1px rgba(255,255,255,.05);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px)}
+#stage:before{content:"";position:absolute;inset:8px;border:1px solid rgba(217,180,90,.08);border-radius:21px;pointer-events:none}
+#stage.show{display:block;animation:rise .55s cubic-bezier(.2,.8,.2,1)}
+@keyframes rise{from{opacity:0;transform:translateY(18px) scale(.985)}to{opacity:1;transform:none}}
+.kicker{display:flex;align-items:center;justify-content:center;gap:10px;color:var(--gold);font-family:"Cinzel",serif;font-size:clamp(9px,1.7vw,12px);font-weight:600;letter-spacing:.22em;text-transform:uppercase;text-align:center}
+.kicker:before,.kicker:after{content:"";height:1px;width:clamp(24px,7vw,70px);background:linear-gradient(90deg,transparent,var(--gold))}
+.kicker:after{background:linear-gradient(90deg,var(--gold),transparent)}
+.viewer{margin-top:8px;text-align:center;font-size:clamp(17px,3vw,25px);line-height:1.15}
+.viewer strong{color:var(--gold2);font-weight:600}
+.gift{display:inline-flex;align-items:center;gap:7px;margin:10px auto 0;padding:6px 11px;border:1px solid rgba(217,180,90,.18);border-radius:999px;background:rgba(217,180,90,.07);color:#d8d0c4;font-size:clamp(12px,2.2vw,15px)}
+.cards-row{display:flex;justify-content:center;align-items:flex-start;gap:clamp(10px,2.2vw,22px);margin:clamp(18px,4vw,28px) auto;width:100%}
+.live-card{width:clamp(112px,19vw,170px);text-align:center}
+.card-frame{position:relative;padding:4px;border-radius:13px;background:linear-gradient(145deg,var(--gold2),#7e5a1d,var(--gold));box-shadow:0 15px 34px rgba(0,0,0,.46)}
+.live-card img{display:block;width:100%;aspect-ratio:0.652;object-fit:cover;border-radius:9px;box-shadow:inset 0 0 0 1px rgba(255,255,255,.08)}
+.live-card.reversed img{transform:rotate(180deg)}
+.pos{margin-top:9px;color:var(--gold);font-family:"Cinzel",serif;font-size:clamp(8px,1.6vw,11px);letter-spacing:.13em;text-transform:uppercase}
+.name{margin-top:4px;font-size:clamp(14px,2.5vw,19px);line-height:1.05}
+.state{display:inline-block;margin-top:4px;font-size:11px;color:#9f968b;font-style:italic}
+.summary{border-top:1px solid var(--line);padding:18px clamp(4px,2vw,16px) 2px;text-align:center;font-size:clamp(16px,2.7vw,21px);line-height:1.45;color:#eee8dd}
+.summary strong{color:var(--gold2);font-weight:600}
+.footer{margin-top:14px;text-align:center;color:#746e67;font-family:"Cinzel",serif;font-size:8px;letter-spacing:.18em;text-transform:uppercase}
+@media(max-width:560px){
+  body{align-items:flex-start;padding:12px;padding-top:max(12px,env(safe-area-inset-top))}
+  #stage{border-radius:22px;padding:17px 14px 14px}
+  #stage:before{inset:5px;border-radius:17px}
+  .cards-row{gap:8px;margin:17px auto 18px}
+  .live-card{width:calc((100% - 16px)/3);max-width:126px}
+  .card-frame{padding:3px;border-radius:11px}
+  .live-card img{border-radius:8px}
+  .summary{font-size:16px;line-height:1.42;padding-top:15px}
+  .footer{font-size:7px}
+}
+@media(max-width:360px){
+  #stage{padding:14px 10px 12px}
+  .viewer{font-size:18px}
+  .name{font-size:13px}
+  .pos{font-size:7px}
+  .summary{font-size:15px}
+}
 </style>
 </head>
 <body>
-  <div id="stage">
-    <div class="headline" id="headline"></div>
-    <div class="cards-row" id="cards-row"></div>
-    <div class="summary" id="summary"></div>
-  </div>
-
+<main id="stage" aria-live="polite">
+  <div class="kicker">Jalur Tarot · Live Reading</div>
+  <div class="viewer" id="viewer"></div>
+  <div class="gift" id="gift" hidden></div>
+  <div class="cards-row" id="cards-row"></div>
+  <div class="summary" id="summary"></div>
+  <div class="footer">interpretasi untuk hiburan & refleksi pribadi</div>
+</main>
 <script>
-(function () {
-  var lastId = null;
-  var HIDE_AFTER_MS = 45000; // sembunyikan overlay 45 detik setelah draw ditampilkan
-  var hideTimer = null;
-
-  function escHtml(s) {
-    return String(s).replace(/[&<>"']/g, function (m) {
-      return { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[m];
-    });
+(function(){
+  var lastId=null,hideTimer=null,HIDE_AFTER_MS=45000;
+  function esc(s){return String(s??"").replace(/[&<>"]/g,function(m){return{"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[m]})}
+  function md(s){return esc(s).replace(/\*\*(.+?)\*\*/g,"<strong>$1</strong>").replace(/\\n/g,"<br/>")}
+  function render(draw){
+    var stage=document.getElementById("stage"),viewer=document.getElementById("viewer"),gift=document.getElementById("gift"),row=document.getElementById("cards-row"),summary=document.getElementById("summary");
+    viewer.innerHTML="Ramalan untuk <strong>"+esc(draw.username||"Penonton")+"</strong>";
+    if(draw.giftName){
+      gift.hidden=false;
+      gift.textContent="✦ "+draw.giftName+(draw.giftCount>1?" × "+draw.giftCount:"");
+    }else{gift.hidden=true}
+    row.innerHTML=(draw.cards||[]).map(function(c){
+      return '<article class="live-card'+(c.isReversed?" reversed":"")+'">'+
+        '<div class="card-frame"><img src="'+esc(c.image)+'" alt="'+esc(c.nameCn)+'"/></div>'+
+        '<div class="pos">'+esc(c.positionNameCn)+'</div>'+
+        '<div class="name">'+esc(c.nameCn)+'</div>'+
+        (c.isReversed?'<div class="state">terbalik</div>':"")+
+        '</article>';
+    }).join("");
+    summary.innerHTML=md(draw.summary||"");
+    stage.classList.remove("show"); void stage.offsetWidth; stage.classList.add("show");
+    if(hideTimer)clearTimeout(hideTimer);
+    hideTimer=setTimeout(function(){stage.classList.remove("show")},HIDE_AFTER_MS);
   }
-
-  function mdToHtml(s) {
-    return escHtml(s)
-      .replace(/\\*\\*(.+?)\\*\\*/g, function (_m, inner) { return '<strong>' + inner + '</strong>'; })
-      .replace(/\\n/g, '<br/>');
-  }
-
-  function render(draw) {
-    var stage = document.getElementById('stage');
-    var headline = document.getElementById('headline');
-    var cardsRow = document.getElementById('cards-row');
-    var summary = document.getElementById('summary');
-
-    var giftLine = draw.giftName
-      ? '✦ ' + escHtml(draw.username) + ' mengirim ' + escHtml(draw.giftName) + (draw.giftCount > 1 ? ' x' + draw.giftCount : '') + ' ✦'
-      : '✦ Ramalan untuk ' + escHtml(draw.username) + ' ✦';
-    headline.textContent = giftLine;
-
-    cardsRow.innerHTML = draw.cards.map(function (c) {
-      return '<div class="live-card' + (c.isReversed ? ' reversed' : '') + '">' +
-        '<img src="' + c.image + '" alt="' + escHtml(c.nameCn) + '"/>' +
-        '<div class="pos">' + escHtml(c.positionNameCn) + '</div>' +
-        '<div class="name">' + escHtml(c.nameCn) + (c.isReversed ? ' (terbalik)' : '') + '</div>' +
-        '</div>';
-    }).join('');
-
-    summary.innerHTML = mdToHtml(draw.summary);
-
-    stage.classList.add('show');
-    if (hideTimer) clearTimeout(hideTimer);
-    hideTimer = setTimeout(function () { stage.classList.remove('show'); }, HIDE_AFTER_MS);
-  }
-
-  async function poll() {
-    try {
-      const res = await fetch('/api/live/state', { cache: 'no-store' });
-      const data = await res.json();
-      if (data.draw && data.draw.id !== lastId) {
-        lastId = data.draw.id;
-        render(data.draw);
-      }
-    } catch (e) { /* diamkan — coba lagi di poll berikutnya */ }
-    setTimeout(poll, 2000);
+  async function poll(){
+    try{
+      var res=await fetch("/api/live/state",{cache:"no-store"});
+      if(!res.ok)throw new Error("state "+res.status);
+      var data=await res.json();
+      if(data.draw&&data.draw.id!==lastId){lastId=data.draw.id;render(data.draw)}
+    }catch(e){}
+    setTimeout(poll,2000);
   }
   poll();
 })();
