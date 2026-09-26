@@ -34,6 +34,9 @@ const {
   LIKE_MILESTONE = '1000',
   DEFAULT_SPREAD = 'single',
   SIGN_API_KEY = '',
+  RECONNECT_MIN_MS = '5000',
+  RECONNECT_MAX_MS = '60000',
+  WORKER_TIMEOUT_MS = '10000',
 } = process.env;
 
 function requireEnv(name, value) {
@@ -74,6 +77,9 @@ if (LIKE_MILESTONE.trim() && (!Number.isInteger(likeMilestone) || likeMilestone 
 }
 
 const defaultSpread = DEFAULT_SPREAD === 'three-card' ? 'three-card' : 'single';
+const reconnectMinMs = Math.max(1000, Number.parseInt(RECONNECT_MIN_MS, 10) || 5000);
+const reconnectMaxMs = Math.max(reconnectMinMs, Number.parseInt(RECONNECT_MAX_MS, 10) || 60000);
+const workerTimeoutMs = Math.max(3000, Number.parseInt(WORKER_TIMEOUT_MS, 10) || 10000);
 
 console.log('Jalur Tarot - Bot TikTok Live');
 console.log(`  Akun target      : @${username}`);
@@ -86,54 +92,43 @@ console.log('');
 
 let connection;
 let reconnectTimer = null;
+let healthTimer = null;
 let reconnecting = false;
 let shuttingDown = false;
 let connected = false;
-
-// Simpan trigger singkat untuk mencegah event yang sama memicu draw berulang.
-// TTL pendek agar gift baru tetap dapat diproses.
-const recentTriggers = new Map();
-const DEDUPE_TTL_MS = 15000;
+let reconnectAttempt = 0;
 
 // Index kelipatan like yang sudah pernah memicu draw (reset tiap listener dijalankan ulang).
 let lastLikeMilestoneIndex = 0;
 
-function scheduleReconnect(delayMs, reason) {
-  if (shuttingDown || reconnectTimer || reconnecting) return;
+function nextReconnectDelay() {
+  const base = Math.min(
+    reconnectMaxMs,
+    reconnectMinMs * (2 ** Math.min(reconnectAttempt, 5)),
+  );
+  reconnectAttempt += 1;
+  const jitter = Math.round(base * (0.8 + Math.random() * 0.4));
+  return Math.min(reconnectMaxMs, Math.max(reconnectMinMs, jitter));
+}
 
-  console.log(`RECONNECT: ${reason} Mencoba lagi dalam ${Math.ceil(delayMs / 1000)} detik...`);
+function scheduleReconnect(reason, delayMs = null) {
+  if (shuttingDown || reconnectTimer || reconnecting || connected) return;
+
+  const delay = delayMs ?? nextReconnectDelay();
+  console.log(`RECONNECT: ${reason} Mencoba lagi dalam ${Math.ceil(delay / 1000)} detik...`);
   reconnectTimer = setTimeout(() => {
     reconnectTimer = null;
     void connectWithRetry();
-  }, delayMs);
-}
-
-function makeTriggerKey({ username: sender, kind, giftName, giftCount }) {
-  return `${kind}|${sender}|${giftName}|${giftCount}`.toLowerCase();
-}
-
-function isDuplicateTrigger(key) {
-  const now = Date.now();
-
-  for (const [storedKey, timestamp] of recentTriggers) {
-    if (now - timestamp > DEDUPE_TTL_MS) {
-      recentTriggers.delete(storedKey);
-    }
-  }
-
-  if (recentTriggers.has(key)) return true;
-
-  recentTriggers.set(key, now);
-  return false;
+  }, delay);
 }
 
 function pickSpreadByValue(coinValue) {
-  return coinValue >= threeCardMinValue ? 'three-card' : 'single';
+  return coinValue >= threeCardMinValue ? 'three-card' : defaultSpread;
 }
 
 async function triggerDraw({ sender, giftName, giftCount, spreadId }) {
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 10000);
+  const timeout = setTimeout(() => controller.abort(), workerTimeoutMs);
 
   try {
     const res = await fetch(`${workerUrl}/api/live/trigger`, {
@@ -144,7 +139,7 @@ async function triggerDraw({ sender, giftName, giftCount, spreadId }) {
       },
       body: JSON.stringify({
         username: sender,
-        giftName,
+        giftName: giftName || 'Gift',
         giftCount,
         spreadId,
       }),
@@ -171,7 +166,7 @@ async function triggerDraw({ sender, giftName, giftCount, spreadId }) {
     return true;
   } catch (err) {
     if (err?.name === 'AbortError') {
-      console.error('WORKER ERROR: request timeout setelah 10 detik.');
+      console.error(`WORKER ERROR: request timeout setelah ${workerTimeoutMs} ms.`);
     } else {
       console.error(`WORKER ERROR: gagal menghubungi Worker - ${err?.message || err}`);
     }
@@ -185,24 +180,20 @@ function attachListeners() {
   connection.on(WebcastEvent.GIFT, (data) => {
     // Gift streakable dikirim berkali-kali dalam satu combo.
     // Tunggu repeatEnd agar satu combo tidak memicu banyak draw.
-    if (data.giftType === 1 && !data.repeatEnd) return;
+    const giftDetails = data.giftDetails || {};
+    const giftType = Number(giftDetails.giftType ?? data.giftType) || 0;
+    if (giftType === 1 && !data.repeatEnd) return;
 
-    const giftName = String(data.giftName || '').trim();
-    const repeatCount = Number(data.repeatCount) || 1;
-    const diamondCount = Number(data.diamondCount) || 0;
+    const giftName = String(giftDetails.giftName ?? data.giftName ?? '').trim();
+    const repeatCount = Math.max(1, Number(data.repeatCount) || 1);
+    const diamondCount = Math.max(0, Number(giftDetails.diamondCount ?? data.diamondCount) || 0);
     const coinValue = diamondCount * repeatCount;
     const sender = String(data.user?.uniqueId || data.uniqueId || 'Penonton').trim() || 'Penonton';
 
     if (targetGiftLower && giftName.toLowerCase() !== targetGiftLower) return;
     if (coinValue < minGiftValue) return;
 
-    const key = makeTriggerKey({ username: sender, kind: 'gift', giftName, giftCount: repeatCount });
-    if (isDuplicateTrigger(key)) {
-      console.log(`DUPLICATE: ${sender} - ${giftName} x${repeatCount} diabaikan.`);
-      return;
-    }
-
-    console.log(`GIFT: ${sender} mengirim ${giftName} x${repeatCount} (${coinValue} koin)`);
+    console.log(`GIFT: ${sender} mengirim ${giftName || 'gift'} x${repeatCount} (${coinValue} koin)`);
     void triggerDraw({
       sender,
       giftName,
@@ -233,40 +224,59 @@ function attachListeners() {
 
   connection.on(WebcastEvent.CONNECTED, (state) => {
     connected = true;
+    reconnectAttempt = 0;
     lastLikeMilestoneIndex = 0;
     console.log(`CONNECTED: @${username} (roomId: ${state.roomId})`);
   });
 
-  connection.on(WebcastEvent.DISCONNECTED, () => {
+  connection.on(WebcastEvent.DISCONNECTED, ({ code, reason } = {}) => {
     if (shuttingDown) return;
 
     connected = false;
-    console.log('DISCONNECTED: koneksi TikTok terputus.');
-    scheduleReconnect(10000, 'Koneksi terputus.');
+    console.log(
+      `DISCONNECTED: koneksi TikTok terputus${code !== undefined ? ` (code ${code})` : ''}${reason ? ` - ${reason}` : ''}.`,
+    );
+    scheduleReconnect('Koneksi terputus.');
   });
 
   connection.on(WebcastEvent.ERROR, (err) => {
-    console.error(`CONNECTION ERROR: ${err?.message || err}`);
+    console.error(`CONNECTION ERROR: ${err?.message || err?.info || err || 'unknown error'}`);
+    // Jika error terjadi di luar siklus connect/disconnect, health monitor akan memastikan
+    // koneksi tidak dibiarkan mati tanpa recovery.
+    if (!connected && !reconnecting) scheduleReconnect('Connector melaporkan error.');
   });
 }
 
+function startHealthMonitor() {
+  healthTimer = setInterval(() => {
+    if (shuttingDown || !connection) return;
+
+    const isConnected = Boolean(connection.isConnected);
+    const isConnecting = Boolean(connection.isConnecting);
+    connected = isConnected;
+
+    if (!isConnected && !isConnecting && !reconnecting) {
+      scheduleReconnect('Health check mendeteksi koneksi tidak aktif.');
+    }
+  }, 30000);
+}
+
 async function connectWithRetry() {
-  if (shuttingDown || reconnecting || connected) return;
+  if (shuttingDown || reconnecting || connection?.isConnected) return;
 
   reconnecting = true;
   console.log(`CONNECT: mencoba @${username}...`);
 
   try {
-    await connection.connect();
+    const state = await connection.connect();
+    connected = Boolean(state?.isConnected ?? connection.isConnected);
+    if (connected) reconnectAttempt = 0;
   } catch (err) {
     connected = false;
     console.error(`CONNECT FAILED: @${username} belum terhubung. ${err?.message || err}`);
-    // Jadwalkan setelah finally melepas flag reconnecting.
-    setTimeout(() => {
-      if (!shuttingDown) scheduleReconnect(15000, 'Percobaan koneksi gagal.');
-    }, 0);
   } finally {
     reconnecting = false;
+    if (!connected && !shuttingDown) scheduleReconnect('Percobaan koneksi gagal.');
   }
 }
 
@@ -277,6 +287,10 @@ async function shutdown(signal) {
   if (reconnectTimer) {
     clearTimeout(reconnectTimer);
     reconnectTimer = null;
+  }
+  if (healthTimer) {
+    clearInterval(healthTimer);
+    healthTimer = null;
   }
 
   console.log(`SHUTDOWN: menerima ${signal}, menghentikan listener...`);
@@ -294,7 +308,9 @@ async function shutdown(signal) {
 
 async function main() {
   connection = new TikTokLiveConnection(username, {
-    signApiKey: SIGN_API_KEY?.trim() || undefined,
+    signApiKey: SIGN_API_KEY.trim() || undefined,
+    // Jangan replay batch awal ketika listener baru connect; hanya proses event live setelah connect.
+    processInitialData: false,
   });
 
   attachListeners();
@@ -302,6 +318,7 @@ async function main() {
   process.once('SIGINT', () => void shutdown('SIGINT'));
   process.once('SIGTERM', () => void shutdown('SIGTERM'));
 
+  startHealthMonitor();
   await connectWithRetry();
 }
 

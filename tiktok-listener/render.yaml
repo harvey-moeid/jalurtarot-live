@@ -1,5 +1,5 @@
-# Manual control: listener Render hanya berjalan saat tombol NYALAKAN dipakai.
-# Tidak ada Cron Job otomatis.
+# Manual control: listener Render berjalan saat service dinyalakan dari panel admin.
+# Tidak ada Cron Job / controller otomatis.
 services:
   - type: worker
     name: jalurtarot-tiktok-listener
@@ -29,3 +29,9 @@ services:
         value: "1000"
       - key: SIGN_API_KEY
         value: ""
+      - key: RECONNECT_MIN_MS
+        value: "5000"
+      - key: RECONNECT_MAX_MS
+        value: "60000"
+      - key: WORKER_TIMEOUT_MS
+        value: "10000"
