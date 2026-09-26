@@ -3,10 +3,10 @@ import type { Env } from './api';
 import { getLLMConfig, setLLMConfig } from '../lib/config';
 import { generateLiveDraw, saveLiveDraw, getLiveDraw, type LiveSpreadId } from '../lib/live';
 
-// ââ Extend Env untuk ADMIN_PASSWORD ââ
+// ─── Extend Env untuk ADMIN_PASSWORD ───
 // Catatan: field OpenRouter di bawah ini hanya dipertahankan supaya halaman
 // legacy /admin/health & /admin/credits (fitur AI, sudah dimatikan) tetap
-// lolos type-check. Aplikasi utama (api.ts) sudah tidak memakainya lagi â
+// lolos type-check. Aplikasi utama (api.ts) sudah tidak memakainya lagi —
 // Ramalan Live 100% statis tanpa AI.
 type AdminEnv = Env & {
   ADMIN_PASSWORD: string;
@@ -26,15 +26,15 @@ type AdminEnv = Env & {
 
 const admin = new Hono<{ Bindings: AdminEnv }>();
 
-// ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
-// ââ AUTH HELPERS ââ
-// ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+// ══════════════════════════════════════
+// ── AUTH HELPERS ──
+// ══════════════════════════════════════
 
 function getSessionToken(password: string): string {
   // Deterministic token: base64url(password + salt)
   // Gunakan base64url agar aman di cookie value (tidak ada +, /, = yang bisa rusak)
   const raw = `jalurtarot-admin:${password}`;
-  // btoa lalu ganti karakter tidak aman di cookie: + â -, / â _, = hilangkan
+  // btoa lalu ganti karakter tidak aman di cookie: + → -, / → _, = hilangkan
   return btoa(raw).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
 }
 
@@ -101,9 +101,9 @@ async function getRenderListenerState(env: AdminEnv): Promise<{ ok: boolean; ser
   catch (e: any) { return { ok: false, error: String(e?.message || e) }; }
 }
 
-// ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
-// ââ KV HELPERS ââ
-// ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+// ══════════════════════════════════════
+// ── KV HELPERS ──
+// ══════════════════════════════════════
 
 const CREDIT_LIMIT = 10;
 const CREDIT_TTL_SECONDS = 7 * 24 * 60 * 60;
@@ -154,14 +154,14 @@ async function getBanner(env: AdminEnv): Promise<{ text: string; type: string; a
   } catch { return null; }
 }
 
-// ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
-// ââ HTML ESCAPE HELPER ââ
+// ══════════════════════════════════════
+// ── HTML ESCAPE HELPER ──
 // Selalu gunakan ini sebelum render data dari KV/user ke HTML.
-// ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+// ══════════════════════════════════════
 
 /**
  * Escape karakter HTML berbahaya dari string yang berasal dari
- * input user, KV, atau query param â sebelum di-embed ke HTML.
+ * input user, KV, atau query param — sebelum di-embed ke HTML.
  * Mencegah XSS pada admin panel.
  */
 function esc(str: string | undefined | null): string {
@@ -174,7 +174,7 @@ function esc(str: string | undefined | null): string {
     .replace(/'/g, '&#39;');
 }
 
-// ââ Ambil semua credit keys dari KV ââ
+// ── Ambil semua credit keys dari KV ──
 async function listCreditKeys(env: AdminEnv): Promise<Array<{ ip: string; state: CreditState; blacklisted: boolean }>> {
   try {
     const list = await env.RATE_LIMIT_KV.list({ prefix: 'credit:' });
@@ -189,7 +189,7 @@ async function listCreditKeys(env: AdminEnv): Promise<Array<{ ip: string; state:
   } catch { return []; }
 }
 
-// ââ Test satu OpenRouter key ââ
+// ── Test satu OpenRouter key ──
 async function testKey(env: AdminEnv, apiKey: string, keyLabel: string, activeModel?: string): Promise<{
   label: string;
   ok: boolean;
@@ -204,7 +204,7 @@ async function testKey(env: AdminEnv, apiKey: string, keyLabel: string, activeMo
   const baseUrl = (env.OPENROUTER_BASE_URL || 'https://openrouter.ai/api/v1').replace(/\/$/, '');
   const start = Date.now();
 
-  // Timeout 15 detik â Workers tidak boleh gantung terlalu lama
+  // Timeout 15 detik — Workers tidak boleh gantung terlalu lama
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 15_000);
 
@@ -255,18 +255,18 @@ async function testKey(env: AdminEnv, apiKey: string, keyLabel: string, activeMo
   }
 }
 
-// ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
-// ââ HTML HELPERS ââ
-// ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+// ══════════════════════════════════════
+// ── HTML HELPERS ──
+// ══════════════════════════════════════
 
 function adminShell(title: string, content: string, activePage: string = ''): string {
   const nav = [
-    { href: '/admin', label: 'ð Dashboard', id: 'dashboard' },
-    { href: '/admin/live', label: 'ð´ Live', id: 'live' },
-    { href: '/admin/credits', label: 'ð³ Credits', id: 'credits' },
-    { href: '/admin/health', label: 'ð LLM Health', id: 'health' },
-    { href: '/admin/banner', label: 'ð¢ Banner', id: 'banner' },
-    { href: '/admin/blacklist', label: 'ð« Blacklist', id: 'blacklist' },
+    { href: '/admin', label: '📊 Dashboard', id: 'dashboard' },
+    { href: '/admin/live', label: '🔴 Live', id: 'live' },
+    { href: '/admin/credits', label: '💳 Credits', id: 'credits' },
+    { href: '/admin/health', label: '🏥 LLM Health', id: 'health' },
+    { href: '/admin/banner', label: '📢 Banner', id: 'banner' },
+    { href: '/admin/blacklist', label: '🚫 Blacklist', id: 'blacklist' },
   ];
 
   return `<!DOCTYPE html>
@@ -274,8 +274,15 @@ function adminShell(title: string, content: string, activePage: string = ''): st
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <title>${title} â JalurTarot Admin</title>
+  <title>${title} — JalurTarot Admin</title>
   <meta name="robots" content="noindex,nofollow"/>
+  <link rel="manifest" href="/manifest-admin.json"/>
+  <link rel="apple-touch-icon" href="/icons/icon-192.png"/>
+  <meta name="theme-color" content="#0a0a0f"/>
+  <meta name="mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+  <meta name="apple-mobile-web-app-title" content="Tarot Admin"/>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
@@ -303,7 +310,7 @@ function adminShell(title: string, content: string, activePage: string = ''): st
       min-height: 100vh;
       display: flex;
     }
-    /* ââ Sidebar ââ */
+    /* ── Sidebar ── */
     .sidebar {
       width: 220px;
       min-width: 220px;
@@ -366,7 +373,7 @@ function adminShell(title: string, content: string, activePage: string = ''): st
       transition: all 0.15s;
     }
     .btn-logout:hover { background: var(--red-dim); color: var(--text); border-color: var(--red); }
-    /* ââ Main ââ */
+    /* ── Main ── */
     .main {
       flex: 1;
       padding: 2rem;
@@ -381,7 +388,7 @@ function adminShell(title: string, content: string, activePage: string = ''): st
       align-items: center;
       gap: 0.5rem;
     }
-    /* ââ Cards ââ */
+    /* ── Cards ── */
     .card {
       background: var(--surface);
       border: 1px solid var(--border);
@@ -397,7 +404,7 @@ function adminShell(title: string, content: string, activePage: string = ''): st
       color: var(--text-faint);
       margin-bottom: 1rem;
     }
-    /* ââ Stats row ââ */
+    /* ── Stats row ── */
     .stats-row { display: flex; gap: 1rem; flex-wrap: wrap; margin-bottom: 1.25rem; }
     .stat-box {
       background: var(--surface);
@@ -410,7 +417,7 @@ function adminShell(title: string, content: string, activePage: string = ''): st
     .stat-label { font-size: 10px; color: var(--text-faint); letter-spacing: 0.1em; text-transform: uppercase; }
     .stat-value { font-size: 26px; font-weight: 700; color: var(--gold); margin-top: 4px; }
     .stat-sub { font-size: 11px; color: var(--text-dim); margin-top: 2px; }
-    /* ââ Table ââ */
+    /* ── Table ── */
     .table-wrap { overflow-x: auto; }
     table { width: 100%; border-collapse: collapse; font-size: 13px; }
     th {
@@ -429,7 +436,7 @@ function adminShell(title: string, content: string, activePage: string = ''): st
     }
     tr:last-child td { border-bottom: none; }
     tr:hover td { background: var(--surface2); }
-    /* ââ Badges ââ */
+    /* ── Badges ── */
     .badge {
       display: inline-block;
       padding: 2px 8px;
@@ -443,7 +450,7 @@ function adminShell(title: string, content: string, activePage: string = ''): st
     .badge-yellow { background: rgba(243,156,18,0.15); color: var(--yellow); border: 1px solid rgba(243,156,18,0.3); }
     .badge-blue { background: rgba(41,128,185,0.15); color: #3498db; border: 1px solid rgba(41,128,185,0.3); }
     .badge-gold { background: rgba(200,168,75,0.15); color: var(--gold); border: 1px solid rgba(200,168,75,0.3); }
-    /* ââ Buttons ââ */
+    /* ── Buttons ── */
     .btn {
       padding: 0.4rem 0.9rem;
       border-radius: var(--radius);
@@ -463,7 +470,7 @@ function adminShell(title: string, content: string, activePage: string = ''): st
     .btn-ghost:hover { background: var(--surface2); color: var(--text); }
     .btn-success { background: var(--green-dim); color: var(--text); border-color: var(--green); }
     .btn-success:hover { background: var(--green); color: #fff; }
-    /* ââ Form ââ */
+    /* ── Form ── */
     .form-row { display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap; margin-bottom: 0.75rem; }
     input[type="text"], input[type="number"], textarea, select {
       background: var(--surface2);
@@ -483,7 +490,7 @@ function adminShell(title: string, content: string, activePage: string = ''): st
     input[type="number"] { width: 90px; }
     textarea { width: 100%; min-height: 80px; resize: vertical; }
     label { font-size: 12px; color: var(--text-dim); }
-    /* ââ Alert ââ */
+    /* ── Alert ── */
     .alert {
       padding: 0.75rem 1rem;
       border-radius: var(--radius);
@@ -493,7 +500,7 @@ function adminShell(title: string, content: string, activePage: string = ''): st
     .alert-success { background: rgba(39,174,96,0.1); border: 1px solid rgba(39,174,96,0.3); color: #5dba7e; }
     .alert-error { background: rgba(192,57,43,0.1); border: 1px solid rgba(192,57,43,0.3); color: #e74c3c; }
     .alert-info { background: rgba(41,128,185,0.1); border: 1px solid rgba(41,128,185,0.3); color: #5dade2; }
-    /* ââ Progress bar ââ */
+    /* ── Progress bar ── */
     .progress-bar {
       height: 6px;
       background: var(--border);
@@ -510,7 +517,7 @@ function adminShell(title: string, content: string, activePage: string = ''): st
     }
     .progress-fill.danger { background: var(--red); }
     .progress-fill.warning { background: var(--yellow); }
-    /* ââ Health indicator ââ */
+    /* ── Health indicator ── */
     .health-dot {
       width: 10px;
       height: 10px;
@@ -522,7 +529,7 @@ function adminShell(title: string, content: string, activePage: string = ''): st
     .health-dot.fail { background: var(--red); box-shadow: 0 0 6px var(--red); }
     .health-dot.pending { background: var(--yellow); animation: pulse 1s ease-in-out infinite; }
     @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
-    /* ââ Banner preview ââ */
+    /* ── Banner preview ── */
     .banner-preview {
       padding: 0.6rem 1rem;
       border-radius: var(--radius);
@@ -535,17 +542,17 @@ function adminShell(title: string, content: string, activePage: string = ''): st
     .banner-preview.info { border-left-color: var(--blue); background: rgba(41,128,185,0.07); }
     .banner-preview.warning { border-left-color: var(--yellow); background: rgba(243,156,18,0.07); }
     .banner-preview.error { border-left-color: var(--red); background: rgba(192,57,43,0.07); }
-    /* ââ Mono IP ââ */
+    /* ── Mono IP ── */
     .mono { font-family: 'Courier New', monospace; font-size: 12px; color: var(--text-dim); }
-    /* ââ Responsive ââ */
+    /* ── Responsive ── */
     @media (max-width: 640px) {
       .sidebar { display: none; }
       .main { padding: 1rem; }
     }
-    /* ââ Inline edit ââ */
+    /* ── Inline edit ── */
     .inline-edit { display: flex; gap: 0.5rem; align-items: center; }
     .inline-edit input { width: 70px; }
-    /* ââ Empty state ââ */
+    /* ── Empty state ── */
     .empty-state {
       text-align: center;
       padding: 3rem 1rem;
@@ -558,7 +565,7 @@ function adminShell(title: string, content: string, activePage: string = ''): st
 <body>
   <aside class="sidebar">
     <div class="sidebar-logo">
-      <h1>â Admin</h1>
+      <h1>🔮 Admin</h1>
       <p>JalurTarot Panel</p>
     </div>
     <nav>
@@ -566,7 +573,7 @@ function adminShell(title: string, content: string, activePage: string = ''): st
     </nav>
     <div class="sidebar-bottom">
       <form method="POST" action="/admin/logout">
-        <button type="submit" class="btn-logout">ðª Logout</button>
+        <button type="submit" class="btn-logout">🚪 Logout</button>
       </form>
     </div>
   </aside>
@@ -574,13 +581,14 @@ function adminShell(title: string, content: string, activePage: string = ''): st
     <h1 class="page-title">${title}</h1>
     ${content}
   </main>
+  <script>if('serviceWorker' in navigator){navigator.serviceWorker.register('/sw-admin.js').catch(function(){});}</script>
 </body>
 </html>`;
 }
 
-// ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
-// ââ ROUTES: AUTH ââ
-// ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+// ══════════════════════════════════════
+// ── ROUTES: AUTH ──
+// ══════════════════════════════════════
 
 // GET /admin/login
 admin.get('/login', (c) => {
@@ -595,8 +603,11 @@ admin.get('/login', (c) => {
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <title>Admin Login â JalurTarot</title>
+  <title>Admin Login — JalurTarot</title>
   <meta name="robots" content="noindex,nofollow"/>
+  <link rel="manifest" href="/manifest-admin.json"/>
+  <link rel="apple-touch-icon" href="/icons/icon-192.png"/>
+  <meta name="theme-color" content="#0a0a0f"/>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     body {
@@ -683,22 +694,22 @@ admin.get('/login', (c) => {
 </head>
 <body>
   <div class="login-box">
-    <h1>â Admin Panel</h1>
-    <p class="sub">JalurTarot â Area Terbatas</p>
+    <h1>🔮 Admin Panel</h1>
+    <p class="sub">JalurTarot — Area Terbatas</p>
     ${error && hint ? `
     <div class="alert alert-warn">
-      â  <strong>ADMIN_PASSWORD belum diset.</strong><br>
+      ⚠ <strong>ADMIN_PASSWORD belum diset.</strong><br>
       Jalankan: <code>wrangler secret put ADMIN_PASSWORD</code><br>
       Atau gunakan password default: <code>changeme</code>
     </div>` : error ? `
-    <div class="alert alert-error">â  Password salah. Coba lagi.</div>` : ''}
+    <div class="alert alert-error">⚠ Password salah. Coba lagi.</div>` : ''}
     <form method="POST" action="/admin/login">
       <label>PASSWORD</label>
       <div class="pw-wrap">
-        <input type="password" id="pwField" name="password" placeholder="â¢â¢â¢â¢â¢â¢â¢â¢" autofocus required autocomplete="current-password"/>
-        <button type="button" class="pw-toggle" onclick="togglePw()" title="Tampilkan/sembunyikan">ð</button>
+        <input type="password" id="pwField" name="password" placeholder="••••••••" autofocus required autocomplete="current-password"/>
+        <button type="button" class="pw-toggle" onclick="togglePw()" title="Tampilkan/sembunyikan">👁</button>
       </div>
-      <button type="submit">Masuk â</button>
+      <button type="submit">Masuk →</button>
     </form>
   </div>
   <script>
@@ -754,9 +765,9 @@ admin.post('/logout', (c) => {
   return res;
 });
 
-// ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
-// ââ ROUTES: DASHBOARD ââ
-// ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+// ══════════════════════════════════════
+// ── ROUTES: DASHBOARD ──
+// ══════════════════════════════════════
 
 admin.get('/', async (c) => {
   const authErr = requireAuth(c);
@@ -783,7 +794,7 @@ admin.get('/', async (c) => {
   ].filter((k): k is string => typeof k === 'string' && k.trim().length > 0).length;
 
   const content = `
-    ${banner?.active ? `<div class="alert alert-info">ð¢ Banner aktif: "${esc(banner.text)}"</div>` : ''}
+    ${banner?.active ? `<div class="alert alert-info">📢 Banner aktif: "${esc(banner.text)}"</div>` : ''}
     <div class="stats-row">
       <div class="stat-box">
         <div class="stat-label">Total IP Tracked</div>
@@ -803,29 +814,29 @@ admin.get('/', async (c) => {
       <div class="stat-box">
         <div class="stat-label">IP High Usage</div>
         <div class="stat-value" style="color:${highUsage > 0 ? 'var(--yellow)' : 'var(--text)'}">${highUsage}</div>
-        <div class="stat-sub">â¥80% limit terpakai</div>
+        <div class="stat-sub">≥80% limit terpakai</div>
       </div>
       <div class="stat-box">
         <div class="stat-label">OpenRouter Keys</div>
         <div class="stat-value">${keyCount}</div>
-        <div class="stat-sub">key terdaftar â <a href="/admin/health" style="color:var(--gold);text-decoration:none;font-size:11px;">cek status</a></div>
+        <div class="stat-sub">key terdaftar · <a href="/admin/health" style="color:var(--gold);text-decoration:none;font-size:11px;">cek status</a></div>
       </div>
     </div>
 
     <div class="card">
       <div class="card-title">Quick Links</div>
       <div style="display:flex;gap:0.75rem;flex-wrap:wrap;">
-        <a href="/admin/credits" class="btn btn-ghost">ð³ Kelola Credits</a>
-        <a href="/admin/health" class="btn btn-ghost">ð Cek LLM Keys</a>
-        <a href="/admin/banner" class="btn btn-ghost">ð¢ Set Banner</a>
-        <a href="/admin/blacklist" class="btn btn-ghost">ð« Kelola Blacklist</a>
-        <a href="/" class="btn btn-ghost" target="_blank">ð Buka Situs</a>
+        <a href="/admin/credits" class="btn btn-ghost">💳 Kelola Credits</a>
+        <a href="/admin/health" class="btn btn-ghost">🏥 Cek LLM Keys</a>
+        <a href="/admin/banner" class="btn btn-ghost">📢 Set Banner</a>
+        <a href="/admin/blacklist" class="btn btn-ghost">🚫 Kelola Blacklist</a>
+        <a href="/" class="btn btn-ghost" target="_blank">🌐 Buka Situs</a>
       </div>
     </div>
 
     <div class="card">
       <div class="card-title">Top IP by Usage (5 Teratas)</div>
-      ${entries.length === 0 ? `<div class="empty-state"><p>ð­</p><p>Belum ada data kredit</p></div>` : `
+      ${entries.length === 0 ? `<div class="empty-state"><p>📭</p><p>Belum ada data kredit</p></div>` : `
       <div class="table-wrap">
         <table>
           <thead>
@@ -850,7 +861,7 @@ admin.get('/', async (c) => {
                 return `<tr>
                   <td class="mono">${e.ip}</td>
                   <td>${e.state.used} / ${effective}</td>
-                  <td>${e.state.credited > 0 ? `<span class="badge badge-gold">+${e.state.credited}</span>` : 'â'}</td>
+                  <td>${e.state.credited > 0 ? `<span class="badge badge-gold">+${e.state.credited}</span>` : '—'}</td>
                   <td>
                     <div class="progress-bar"><div class="progress-fill ${fillClass}" style="width:${pct}%"></div></div>
                     <span style="font-size:11px;color:var(--text-dim);margin-left:6px;">${pct}%</span>
@@ -866,12 +877,12 @@ admin.get('/', async (c) => {
     </div>
   `;
 
-  return c.html(adminShell('ð Dashboard', content, 'dashboard'));
+  return c.html(adminShell('📊 Dashboard', content, 'dashboard'));
 });
 
-// ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
-// ââ ROUTES: CREDITS ââ
-// ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+// ══════════════════════════════════════
+// ── ROUTES: CREDITS ──
+// ══════════════════════════════════════
 
 admin.get('/credits', async (c) => {
   const authErr = requireAuth(c);
@@ -928,7 +939,7 @@ admin.get('/credits', async (c) => {
 
     <div class="card">
       <div class="card-title">Semua IP Tracked (${sorted.length})</div>
-      ${sorted.length === 0 ? `<div class="empty-state"><p>ð­</p><p>Tidak ada data${filterIp ? ` untuk IP "${esc(filterIp)}"` : ''}</p></div>` : `
+      ${sorted.length === 0 ? `<div class="empty-state"><p>📭</p><p>Tidak ada data${filterIp ? ` untuk IP "${esc(filterIp)}"` : ''}</p></div>` : `
       <div class="table-wrap">
         <table>
           <thead>
@@ -954,7 +965,7 @@ admin.get('/credits', async (c) => {
                 <td class="mono">${safeIp}</td>
                 <td>${e.state.used}</td>
                 <td>${effective} (base ${CREDIT_LIMIT} + bonus ${e.state.credited})</td>
-                <td>${e.state.credited > 0 ? `<span class="badge badge-gold">+${e.state.credited}</span>` : 'â'}</td>
+                <td>${e.state.credited > 0 ? `<span class="badge badge-gold">+${e.state.credited}</span>` : '—'}</td>
                 <td>
                   <div class="progress-bar"><div class="progress-fill ${fillClass}" style="width:${pct}%"></div></div>
                   <span style="font-size:11px;color:var(--text-dim);margin-left:6px;">${pct}%</span>
@@ -979,12 +990,12 @@ admin.get('/credits', async (c) => {
                     ? `<form method="POST" action="/admin/blacklist/add" style="display:inline;margin-left:4px;" onsubmit="return confirm('Blacklist ${safeIp}?')">
                         <input type="hidden" name="ip" value="${safeIp}"/>
                         <input type="hidden" name="redirect" value="/admin/credits"/>
-                        <button type="submit" class="btn btn-ghost" style="font-size:10px;padding:2px 7px;">ð«</button>
+                        <button type="submit" class="btn btn-ghost" style="font-size:10px;padding:2px 7px;">🚫</button>
                        </form>`
                     : `<form method="POST" action="/admin/blacklist/remove" style="display:inline;margin-left:4px;">
                         <input type="hidden" name="ip" value="${safeIp}"/>
                         <input type="hidden" name="redirect" value="/admin/credits"/>
-                        <button type="submit" class="btn btn-ghost" style="font-size:10px;padding:2px 7px;">â Unblock</button>
+                        <button type="submit" class="btn btn-ghost" style="font-size:10px;padding:2px 7px;">✓ Unblock</button>
                        </form>`
                   }
                 </td>
@@ -997,7 +1008,7 @@ admin.get('/credits', async (c) => {
     </div>
   `;
 
-  return c.html(adminShell('ð³ Credit Manager', content, 'credits'));
+  return c.html(adminShell('💳 Credit Manager', content, 'credits'));
 });
 
 // POST /admin/credits/adjust
@@ -1048,9 +1059,9 @@ admin.post('/credits/reset', async (c) => {
   }
 });
 
-// ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
-// ââ ROUTES: LLM HEALTH ââ
-// ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+// ══════════════════════════════════════
+// ── ROUTES: LLM HEALTH ──
+// ══════════════════════════════════════
 
 admin.get('/health', async (c) => {
   const authErr = requireAuth(c);
@@ -1060,7 +1071,7 @@ admin.get('/health', async (c) => {
   const llmCfg = await getLLMConfig(c.env);
   const model = llmCfg.model;
   const llmEnabled = llmCfg.enabled;
-  // Env fallback info â untuk ditampilkan sebagai referensi
+  // Env fallback info — untuk ditampilkan sebagai referensi
   const envModel = c.env.FALLBACK_LLM_MODEL || 'z-ai/glm-5.2:free';
   const envEnabled = c.env.ENABLE_FALLBACK_LLM === 'true';
 
@@ -1084,22 +1095,22 @@ admin.get('/health', async (c) => {
   const okCount = results.filter(r => r.ok).length;
   const failCount = results.filter(r => !r.ok).length;
 
-  // Render tabel hasil test key â dipisah agar tidak ada template literal bersarang
+  // Render tabel hasil test key — dipisah agar tidak ada template literal bersarang
   function renderKeyTestRows(rows: typeof results, defs: typeof keyDefs): string {
     return rows.map(r => {
       const keyDef = defs.find(k => k.label === r.label);
       const kv = keyDef?.value || '';
       const masked = kv.length > 14
         ? kv.slice(0, 8) + '...' + kv.slice(-4)
-        : kv.length > 6 ? kv.slice(0, 4) + '...' : 'â';
+        : kv.length > 6 ? kv.slice(0, 4) + '...' : '—';
       const errSafe = r.error ? r.error.replace(/"/g, '&quot;') : '';
-      const errShort = r.error ? (r.error.slice(0, 60) + (r.error.length > 60 ? 'â¦' : '')) : '';
+      const errShort = r.error ? (r.error.slice(0, 60) + (r.error.length > 60 ? '…' : '')) : '';
       const errorHtml = r.error
         ? '<span title="' + errSafe + '" style="cursor:help;border-bottom:1px dashed var(--text-faint);">' + errShort + '</span>'
-        : '<span style="color:var(--text-faint);">â</span>';
+        : '<span style="color:var(--text-faint);">—</span>';
       const statusBadge = r.status !== null
         ? '<span class="badge ' + (r.status === 200 ? 'badge-green' : 'badge-red') + '">' + r.status + '</span>'
-        : '<span style="color:var(--text-faint);">â</span>';
+        : '<span style="color:var(--text-faint);">—</span>';
       return '<tr>'
         + '<td style="font-weight:600;">' + r.label + '</td>'
         + '<td class="mono" style="font-size:11px;">' + masked + '</td>'
@@ -1116,9 +1127,9 @@ admin.get('/health', async (c) => {
 
   const keyTestResultsHtml = doTest ? (
     '<div style="margin-bottom:1rem;display:flex;gap:0.75rem;align-items:center;flex-wrap:wrap;">'
-    + (okCount > 0 ? '<span class="badge badge-green">â ' + okCount + ' key OK</span>' : '')
-    + (failCount > 0 ? '<span class="badge badge-red">â ' + failCount + ' key GAGAL</span>' : '')
-    + '<a href="/admin/health?test=1" class="btn btn-ghost" style="font-size:11px;">â» Test Ulang</a>'
+    + (okCount > 0 ? '<span class="badge badge-green">✓ ' + okCount + ' key OK</span>' : '')
+    + (failCount > 0 ? '<span class="badge badge-red">✗ ' + failCount + ' key GAGAL</span>' : '')
+    + '<a href="/admin/health?test=1" class="btn btn-ghost" style="font-size:11px;">↻ Test Ulang</a>'
     + '<a href="/admin/health" class="btn btn-ghost" style="font-size:11px;">Tutup</a>'
     + '</div>'
     + '<div class="table-wrap"><table>'
@@ -1127,7 +1138,7 @@ admin.get('/health', async (c) => {
     + '</table></div>'
   ) : (
     '<p style="font-size:13px;color:var(--text-dim);margin-bottom:1rem;">Setiap key dicoba dengan request minimal (max_tokens=8).</p>'
-    + '<a href="/admin/health?test=1" class="btn btn-primary">ð Jalankan Health Check</a>'
+    + '<a href="/admin/health?test=1" class="btn btn-primary">🏥 Jalankan Health Check</a>'
   );
 
   // Pesan dari action sebelumnya (model/toggle saved)
@@ -1147,16 +1158,16 @@ admin.get('/health', async (c) => {
   ];
 
   const content = `
-    ${msg ? `<div class="alert alert-${esc(msgType) === 'error' ? 'error' : 'success'}" style="margin-bottom:1rem;">${esc(msgType) === 'error' ? 'â ' : 'â'} ${esc(msg)}</div>` : ''}
+    ${msg ? `<div class="alert alert-${esc(msgType) === 'error' ? 'error' : 'success'}" style="margin-bottom:1rem;">${esc(msgType) === 'error' ? '⚠' : '✓'} ${esc(msg)}</div>` : ''}
 
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1rem;">
 
-      <!-- ââ Card: Ganti Model ââ -->
+      <!-- ── Card: Ganti Model ── -->
       <div class="card" style="margin-bottom:0;">
-        <div class="card-title">ð¤ Model LLM Aktif</div>
+        <div class="card-title">🤖 Model LLM Aktif</div>
         <p style="font-size:12px;color:var(--text-dim);margin-bottom:1rem;line-height:1.6;">
           Model yang dipakai untuk interpretasi tarot.<br/>
-          Perubahan berlaku <strong>langsung</strong> â tanpa redeploy.
+          Perubahan berlaku <strong>langsung</strong> — tanpa redeploy.
         </p>
         <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:0.75rem 1rem;margin-bottom:1rem;display:flex;align-items:center;gap:0.75rem;flex-wrap:wrap;">
           <span style="font-size:11px;color:var(--text-dim);">Aktif sekarang:</span>
@@ -1167,7 +1178,7 @@ admin.get('/health', async (c) => {
           <label style="display:block;font-size:11px;color:var(--text-dim);margin-bottom:0.35rem;letter-spacing:0.04em;">PILIH PRESET MODEL</label>
           <select name="model" style="width:100%;padding:0.55rem 0.75rem;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:12px;margin-bottom:0.75rem;cursor:pointer;font-family:monospace;" onchange="syncCustomField(this)">
             ${MODEL_PRESETS.map(p => `<option value="${p.value}" ${model === p.value ? 'selected' : ''}>${p.label} (${p.note})</option>`).join('')}
-            <option value="__custom__" ${!MODEL_PRESETS.find(p => p.value === model) ? 'selected' : ''}>â Custom (isi manual) â</option>
+            <option value="__custom__" ${!MODEL_PRESETS.find(p => p.value === model) ? 'selected' : ''}>— Custom (isi manual) —</option>
           </select>
           <label style="display:block;font-size:11px;color:var(--text-dim);margin-bottom:0.35rem;letter-spacing:0.04em;">ATAU KETIK MODEL ID MANUAL</label>
           <input type="text" id="customModel" name="custom_model"
@@ -1175,30 +1186,30 @@ admin.get('/health', async (c) => {
             placeholder="provider/model-name:variant"
             style="width:100%;padding:0.55rem 0.75rem;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:12px;font-family:monospace;margin-bottom:0.75rem;outline:none;"
           />
-          <button type="submit" class="btn btn-primary" style="width:100%;">ð¾ Simpan Model</button>
+          <button type="submit" class="btn btn-primary" style="width:100%;">💾 Simpan Model</button>
         </form>
         <p style="font-size:11px;color:var(--text-faint);margin-top:0.6rem;">
           Lihat semua model di <a href="https://openrouter.ai/models" target="_blank" style="color:var(--gold);">openrouter.ai/models</a>
         </p>
       </div>
 
-      <!-- ââ Card: Toggle LLM ââ -->
+      <!-- ── Card: Toggle LLM ── -->
       <div class="card" style="margin-bottom:0;">
-        <div class="card-title">â¡ Status LLM</div>
+        <div class="card-title">⚡ Status LLM</div>
         <p style="font-size:12px;color:var(--text-dim);margin-bottom:1rem;line-height:1.6;">
-          Nonaktifkan LLM untuk beralih ke <strong>static mode</strong> â interpretasi dari template tanpa AI. Berguna saat kuota habis atau debugging.
+          Nonaktifkan LLM untuk beralih ke <strong>static mode</strong> — interpretasi dari template tanpa AI. Berguna saat kuota habis atau debugging.
         </p>
         <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:1rem;margin-bottom:1rem;text-align:center;">
-          <div style="font-size:2rem;margin-bottom:0.4rem;">${llmEnabled ? 'ð¢' : 'ð´'}</div>
+          <div style="font-size:2rem;margin-bottom:0.4rem;">${llmEnabled ? '🟢' : '🔴'}</div>
           <span class="badge ${llmEnabled ? 'badge-green' : 'badge-red'}" style="font-size:13px;padding:0.3rem 0.75rem;">
             ${llmEnabled ? 'LLM AKTIF' : 'STATIC MODE'}
           </span>
-          ${llmEnabled !== envEnabled ? `<div style="font-size:11px;color:var(--text-faint);margin-top:0.5rem;">env: ${envEnabled ? 'aktif' : 'nonaktif'} Â· KV: ${llmEnabled ? 'aktif' : 'nonaktif'}</div>` : ''}
+          ${llmEnabled !== envEnabled ? `<div style="font-size:11px;color:var(--text-faint);margin-top:0.5rem;">env: ${envEnabled ? 'aktif' : 'nonaktif'} · KV: ${llmEnabled ? 'aktif' : 'nonaktif'}</div>` : ''}
         </div>
         <form method="POST" action="/admin/config/llm-toggle">
           <input type="hidden" name="enabled" value="${llmEnabled ? 'false' : 'true'}"/>
           <button type="submit" class="btn ${llmEnabled ? 'btn-ghost' : 'btn-primary'}" style="width:100%;" onclick="return confirm('${llmEnabled ? 'Nonaktifkan LLM? User akan dapat static mode.' : 'Aktifkan LLM?'}')">
-            ${llmEnabled ? 'ð´ Nonaktifkan LLM' : 'ð¢ Aktifkan LLM'}
+            ${llmEnabled ? '🔴 Nonaktifkan LLM' : '🟢 Aktifkan LLM'}
           </button>
         </form>
         <div style="margin-top:1rem;padding-top:0.75rem;border-top:1px solid var(--border);">
@@ -1223,14 +1234,14 @@ admin.get('/health', async (c) => {
     </div>
 
     ${keyDefs.length === 0 ? `
-    <div class="alert alert-error">â  Tidak ada API key yang terdaftar. Set OPENROUTER_API_KEY via <code>wrangler secret put</code>.</div>
+    <div class="alert alert-error">⚠ Tidak ada API key yang terdaftar. Set OPENROUTER_API_KEY via <code>wrangler secret put</code>.</div>
     ` : ''}
 
     <div class="card">
-      <div class="card-title">ð Test Semua Key</div>
+      <div class="card-title">🔍 Test Semua Key</div>
       <p style="font-size:12px;color:var(--text-dim);margin-bottom:0.5rem;">
         Model yang dipakai saat test: <span class="mono" style="color:var(--gold);">${model}</span>
-        &nbsp;Â·&nbsp; Base URL: <span class="mono" style="font-size:11px;">${c.env.OPENROUTER_BASE_URL || 'https://openrouter.ai/api/v1'}</span>
+        &nbsp;·&nbsp; Base URL: <span class="mono" style="font-size:11px;">${c.env.OPENROUTER_BASE_URL || 'https://openrouter.ai/api/v1'}</span>
       </p>
       ${keyTestResultsHtml}
     </div>
@@ -1274,10 +1285,10 @@ wrangler secret put OPENROUTER_API_KEY_3</pre>
     </script>
   `;
 
-  return c.html(adminShell('ð LLM Health Check', content, 'health'));
+  return c.html(adminShell('🏥 LLM Health Check', content, 'health'));
 });
 
-// ââ POST /admin/config/model â simpan model ke KV ââ
+// ── POST /admin/config/model — simpan model ke KV ──
 admin.post('/config/model', async (c) => {
   const authErr = requireAuth(c);
   if (authErr) return authErr;
@@ -1304,7 +1315,7 @@ admin.post('/config/model', async (c) => {
   }
 });
 
-// ââ POST /admin/config/llm-toggle â aktif/nonaktifkan LLM ââ
+// ── POST /admin/config/llm-toggle — aktif/nonaktifkan LLM ──
 admin.post('/config/llm-toggle', async (c) => {
   const authErr = requireAuth(c);
   if (authErr) return authErr;
@@ -1322,9 +1333,9 @@ admin.post('/config/llm-toggle', async (c) => {
   }
 });
 
-// ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
-// ââ ROUTES: BANNER ââ
-// ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+// ══════════════════════════════════════
+// ── ROUTES: BANNER ──
+// ══════════════════════════════════════
 
 admin.get('/banner', async (c) => {
   const authErr = requireAuth(c);
@@ -1345,11 +1356,11 @@ admin.get('/banner', async (c) => {
            </div>
            <div style="margin-top:1rem;display:flex;gap:0.75rem;">
              <form method="POST" action="/admin/banner/deactivate">
-               <button type="submit" class="btn btn-danger">ð Nonaktifkan Banner</button>
+               <button type="submit" class="btn btn-danger">🚫 Nonaktifkan Banner</button>
              </form>
            </div>`
         : `<div class="empty-state" style="padding:1.5rem;">
-             <p>ð¢</p>
+             <p>📢</p>
              <p>Tidak ada banner aktif saat ini</p>
            </div>`
       }
@@ -1365,14 +1376,14 @@ admin.get('/banner', async (c) => {
         <div class="form-row" style="margin-bottom:1rem;">
           <label>Tipe:</label>
           <select name="type">
-            <option value="info" ${banner?.type === 'info' ? 'selected' : ''}>â¹ Info (biru)</option>
-            <option value="warning" ${banner?.type === 'warning' ? 'selected' : ''}>â  Warning (kuning)</option>
-            <option value="error" ${banner?.type === 'error' ? 'selected' : ''}>ð« Error (merah)</option>
-            <option value="" ${!banner?.type || banner?.type === '' ? 'selected' : ''}>â¨ Default (gold)</option>
+            <option value="info" ${banner?.type === 'info' ? 'selected' : ''}>ℹ Info (biru)</option>
+            <option value="warning" ${banner?.type === 'warning' ? 'selected' : ''}>⚠ Warning (kuning)</option>
+            <option value="error" ${banner?.type === 'error' ? 'selected' : ''}>🚫 Error (merah)</option>
+            <option value="" ${!banner?.type || banner?.type === '' ? 'selected' : ''}>✨ Default (gold)</option>
           </select>
         </div>
         <div style="display:flex;gap:0.75rem;">
-          <button type="submit" class="btn btn-primary">ð¾ Simpan & Aktifkan</button>
+          <button type="submit" class="btn btn-primary">💾 Simpan & Aktifkan</button>
         </div>
       </form>
 
@@ -1396,7 +1407,7 @@ admin.get('/banner', async (c) => {
     </div>
   `;
 
-  return c.html(adminShell('ð¢ Banner Manager', content, 'banner'));
+  return c.html(adminShell('📢 Banner Manager', content, 'banner'));
 });
 
 // POST /admin/banner/set
@@ -1432,9 +1443,9 @@ admin.post('/banner/deactivate', async (c) => {
   }
 });
 
-// ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
-// ââ ROUTES: BLACKLIST ââ
-// ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+// ══════════════════════════════════════
+// ── ROUTES: BLACKLIST ──
+// ══════════════════════════════════════
 
 admin.get('/blacklist', async (c) => {
   const authErr = requireAuth(c);
@@ -1461,7 +1472,7 @@ admin.get('/blacklist', async (c) => {
           <input type="text" name="ip" placeholder="1.2.3.4" required/>
           <label>Alasan (opsional)</label>
           <input type="text" name="reason" placeholder="Spam, abuse, dll" style="min-width:180px;"/>
-          <button type="submit" class="btn btn-danger">ð« Blacklist</button>
+          <button type="submit" class="btn btn-danger">🚫 Blacklist</button>
         </div>
         <p style="font-size:11px;color:var(--text-faint);">IP yang diblacklist akan langsung mendapat 429 pada semua request LLM.</p>
       </form>
@@ -1471,7 +1482,7 @@ admin.get('/blacklist', async (c) => {
       <div class="card-title">IP yang Diblacklist (${blacklistedIPs.length})</div>
       ${blacklistedIPs.length === 0 ? `
         <div class="empty-state">
-          <p>â</p>
+          <p>✅</p>
           <p>Tidak ada IP yang diblacklist</p>
         </div>
       ` : `
@@ -1493,7 +1504,7 @@ admin.get('/blacklist', async (c) => {
                   <td>
                     <form method="POST" action="/admin/blacklist/remove" style="display:inline;">
                       <input type="hidden" name="ip" value="${safeIp}"/>
-                      <button type="submit" class="btn btn-success" style="font-size:11px;">â Unblock</button>
+                      <button type="submit" class="btn btn-success" style="font-size:11px;">✓ Unblock</button>
                     </form>
                   </td>
                 </tr>`;
@@ -1514,7 +1525,7 @@ admin.get('/blacklist', async (c) => {
     </div>
   `;
 
-  return c.html(adminShell('ð« IP Blacklist', content, 'blacklist'));
+  return c.html(adminShell('🚫 IP Blacklist', content, 'blacklist'));
 });
 
 // POST /admin/blacklist/add
@@ -1557,10 +1568,10 @@ admin.post('/blacklist/remove', async (c) => {
   }
 });
 
-// ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
-// ââ PUBLIC API: GET /api/banner ââ
+// ══════════════════════════════════════
+// ── PUBLIC API: GET /api/banner ──
 // (Ini di-export terpisah, di-mount di index.ts di luar /admin)
-// ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+// ══════════════════════════════════════
 
 export async function getBannerPublic(env: AdminEnv): Promise<{ active: boolean; text: string; type: string } | null> {
   try {
@@ -1576,11 +1587,11 @@ export async function checkBlacklist(env: AdminEnv, ip: string): Promise<boolean
   return isBlacklisted(env, ip);
 }
 
-// ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
-// ââ RAMALAN LIVE (TikTok) ââ
-// ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+// ══════════════════════════════════════
+// ── RAMALAN LIVE (TikTok) ──
+// ══════════════════════════════════════
 
-// GET /admin/live â panel kontrol & panduan setup
+// GET /admin/live — panel kontrol & panduan setup
 admin.get('/live', async (c) => {
   const authErr = requireAuth(c);
   if (authErr) return authErr;
@@ -1596,9 +1607,9 @@ admin.get('/live', async (c) => {
   const renderConfigured = Boolean((c.env as any).RENDER_API_KEY);
   const statusHtml = !renderConfigured
     ? '<span class="badge badge-yellow">RENDER_API_KEY belum di-set</span>'
-    : !renderState.ok ? '<span class="badge badge-red">● ERROR</span>'
-    : isStopped ? '<span class="badge badge-red">● STOPPED</span>'
-    : '<span class="badge badge-green">● RUNNING</span>';
+    : !renderState.ok ? '<span class="badge badge-red">⚠ ERROR</span>'
+    : isStopped ? '<span class="badge badge-red">⏸ STOPPED</span>'
+    : '<span class="badge badge-green">▶ RUNNING</span>';
 
   const content = `
     ${msg ? `<div class="alert alert-${esc(msgType)}">${esc(msg)}</div>` : ''}
@@ -1612,7 +1623,7 @@ admin.get('/live', async (c) => {
         </div>
         <div style="display:flex;gap:.6rem;flex-wrap:wrap;">
           <form method="POST" action="/admin/live/render/start" onsubmit="return confirm('Nyalakan TikTok Listener di Render?')"><button class="btn btn-success" type="submit">▶ NYALAKAN</button></form>
-          <form method="POST" action="/admin/live/render/stop" onsubmit="return confirm('Stop TikTok Listener di Render?')"><button class="btn btn-danger" type="submit">■ STOP</button></form>
+          <form method="POST" action="/admin/live/render/stop" onsubmit="return confirm('Stop TikTok Listener di Render?')"><button class="btn btn-danger" type="submit">⏸ STOP</button></form>
           <form method="GET" action="/admin/live"><button class="btn btn-ghost" type="submit">↻ REFRESH</button></form>
         </div>
       </div>
@@ -1624,7 +1635,7 @@ admin.get('/live', async (c) => {
 
     <div class="card">
       <div class="card-title">1. Overlay OBS</div>
-      <p style="font-size:13px;color:var(--text-dim);margin-bottom:0.75rem;">Tambahkan sebagai <b>Browser Source</b> di OBS/Streamlabs saat live TikTok. Latar transparan, otomatis update saat ada penarikan kartu baru.</p>
+      <p style="font-size:13px;color:var(--text-dim);margin-bottom:0.75rem;">Tambahkan sebagai <b>Browser Source</b> di OBS/Streamlabs saat live TikTok. Latar transparan, otomatis update saat ada penarikan kartu baru. Bisa juga dibuka & di-<i>install</i> sebagai app terpisah di HP/tablet untuk layar kedua.</p>
       <div class="form-row"><input type="text" readonly value="${esc(overlayUrl)}" style="flex:1;min-width:260px;" onclick="this.select()"/><a href="/live" target="_blank" class="btn">↗ Buka Overlay</a></div>
     </div>
 
@@ -1643,7 +1654,7 @@ admin.get('/live', async (c) => {
 
     <div class="card">
       <div class="card-title">Draw Terakhir</div>
-      ${current ? `<p style="font-size:13px;color:var(--text-dim);"><b>${esc(current.username)}</b> — ${esc(current.spreadNameCn)}${current.giftName ? ` — gift: ${esc(current.giftName)}` : ''}<br/><span style="color:var(--text-faint);font-size:11px;">${new Date(current.createdAt).toLocaleString('id-ID')}</span></p><p style="font-size:13px;margin-top:0.5rem;white-space:pre-wrap;">${esc(current.cards.map((cc: any) => cc.nameCn + (cc.isReversed ? ' (terbalik)' : '')).join(' · '))}</p>` : '<div class="empty-state"><p>Belum ada penarikan kartu.</p></div>'}
+      ${current ? `<p style="font-size:13px;color:var(--text-dim);"><b>${esc(current.username)}</b> · ${esc(current.spreadNameCn)}${current.giftName ? ` · gift: ${esc(current.giftName)}` : ''}<br/><span style="color:var(--text-faint);font-size:11px;">${new Date(current.createdAt).toLocaleString('id-ID')}</span></p><p style="font-size:13px;margin-top:0.5rem;white-space:pre-wrap;">${esc(current.cards.map((cc: any) => cc.nameCn + (cc.isReversed ? ' (terbalik)' : '')).join(' · '))}</p>` : '<div class="empty-state"><p>Belum ada penarikan kartu.</p></div>'}
     </div>
   `;
   return c.html(adminShell('Ramalan Live', content, 'live'));
