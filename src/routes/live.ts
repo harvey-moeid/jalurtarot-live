@@ -79,13 +79,13 @@ body{font-family:"Cormorant Garamond",serif;color:var(--cream);display:flex;alig
 #stage.show{display:block;animation:rise .55s cubic-bezier(.2,.8,.2,1)}
 @keyframes rise{from{opacity:0;transform:translateY(18px) scale(.985)}to{opacity:1;transform:none}}
 .kicker{display:flex;align-items:center;justify-content:center;gap:8px;color:var(--gold);font-family:"Cinzel",serif;font-size:clamp(9px,1.7vw,12px);font-weight:600;letter-spacing:.22em;text-transform:uppercase;text-align:center}
-.kicker-mark{display:inline-flex;align-items:center;justify-content:center;color:var(--gold);opacity:.9}
+.kicker-mark{display:inline-block;width:14px;height:14px;flex:none;vertical-align:-2px;color:var(--gold)}
 .kicker:before,.kicker:after{content:"";height:1px;width:clamp(24px,7vw,70px);background:linear-gradient(90deg,transparent,var(--gold))}
 .kicker:after{background:linear-gradient(90deg,var(--gold),transparent)}
 .viewer{margin-top:8px;text-align:center;font-size:clamp(17px,3vw,25px);line-height:1.15}
 .viewer strong{color:var(--gold2);font-weight:600}
 .gift{display:inline-flex;align-items:center;gap:7px;margin:10px auto 0;padding:6px 11px;border:1px solid rgba(217,180,90,.18);border-radius:999px;background:rgba(217,180,90,.07);color:#d8d0c4;font-size:clamp(12px,2.2vw,15px)}
-.gift-icon{display:inline-flex;align-items:center;color:var(--gold)}
+.gift-icon{display:inline-block;width:14px;height:14px;flex:none;vertical-align:-2px;color:var(--gold)}
 .cards-row{display:flex;justify-content:center;align-items:flex-start;gap:clamp(8px,1.8vw,18px);margin:clamp(18px,4vw,28px) auto;width:100%}
 .live-card{width:clamp(140px,24vw,220px);text-align:center}
 .card-frame{position:relative;padding:5px;border-radius:15px;background:linear-gradient(145deg,var(--gold2),#7e5a1d,var(--gold));box-shadow:0 15px 34px rgba(0,0,0,.46)}
@@ -120,7 +120,7 @@ body{align-items:flex-start;padding:12px;padding-top:max(12px,env(safe-area-inse
 </head>
 <body>
 <main id="stage" aria-live="polite">
-  <div class="kicker"><img class="kicker-mark" src="/icons/live-spark.svg" alt="" aria-hidden="true"/><span>Jalur Tarot - Live Reading</span></div>
+  <div class="kicker"><svg class="kicker-mark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M12 3v18M3 12h18M5.6 5.6l12.8 12.8M18.4 5.6 5.6 18.4"/></svg><span>Jalur Tarot - Live Reading</span></div>
   <div class="viewer" id="viewer">Menunggu pembacaan live...</div>
   <div class="gift" id="gift" hidden></div>
   <div class="cards-row" id="cards-row"></div>
@@ -146,7 +146,7 @@ body{align-items:flex-start;padding:12px;padding-top:max(12px,env(safe-area-inse
     viewer.innerHTML="Ramalan untuk <strong>"+esc(draw.username||"Penonton")+"</strong>";
     if(draw.giftName){
       gift.hidden=false;
-      gift.innerHTML='<img class="gift-icon" src="/icons/live-gift.svg" alt="" aria-hidden="true"/><span>'+esc(draw.giftName)+(draw.giftCount>1?" x "+draw.giftCount:"")+'</span>';
+      gift.innerHTML='<svg class="gift-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M12 20V6M7 9h10M8 6c0-1.7 1.3-3 3-3 1 0 1.8.7 2 1.7C13.2 3.7 14 3 15 3c1.7 0 3 1.3 3 3v3M5 9h14v3H5zM7 12v8h10v-8"/></svg><span>'+esc(draw.giftName)+(draw.giftCount>1?" x "+draw.giftCount:"")+'</span>';
     }else{gift.hidden=true}
     row.innerHTML=(draw.cards||[]).map(function(c){
       return '<article class="live-card'+(c.isReversed?" reversed":"")+'">'+
