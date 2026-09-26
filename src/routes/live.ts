@@ -65,6 +65,12 @@ export function liveOverlayPage(): string {
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
 <meta name="theme-color" content="#08070b"/>
+<link rel="manifest" href="/manifest-live.json"/>
+<link rel="apple-touch-icon" href="/icons/icon-192.png"/>
+<meta name="mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+<meta name="apple-mobile-web-app-title" content="Tarot Overlay"/>
 <title>Jalur Tarot - Live</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
@@ -169,6 +175,9 @@ body{align-items:flex-start;padding:12px;padding-top:max(12px,env(safe-area-inse
       if(data.draw){if(data.draw.id!==lastId){lastId=data.draw.id;render(data.draw)}}
     }catch(e){}
     setTimeout(poll,2000);
+  }
+  if('serviceWorker' in navigator){
+    navigator.serviceWorker.register('/sw-live.js').catch(function(){});
   }
   poll();
 })();
