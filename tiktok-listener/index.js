@@ -91,8 +91,14 @@ function scheduleReconnect(delayMs, reason) {
   }, delayMs);
 }
 
+// FIX: template literal sebelumnya meng-escape "$" (\${giftName}, \${giftCount})
+// jadi giftName & giftCount TIDAK pernah ter-interpolasi - dedupe key selalu
+// jadi "sender|${giftName}|${giftCount}" literal, hanya beda per-sender.
+// Akibatnya: gift KEDUA (nama/jumlah beda) dari sender yang sama dalam 15 detik
+// salah dianggap duplikat dan diabaikan. Sekarang giftName & giftCount ikut
+// dipakai membedakan key, sesuai maksud aslinya.
 function makeTriggerKey({ username: sender, giftName, giftCount }) {
-  return `${sender}|\${giftName}|\${giftCount}`.toLowerCase();
+  return `${sender}|${giftName}|${giftCount}`.toLowerCase();
 }
 
 function isDuplicateTrigger(key) {
