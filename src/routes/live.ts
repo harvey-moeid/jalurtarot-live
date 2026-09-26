@@ -96,6 +96,7 @@ body{font-family:"Cormorant Garamond",serif;color:var(--cream);display:flex;alig
 .state{display:inline-block;margin-top:4px;font-size:11px;color:#9f968b;font-style:italic}
 .summary{border-top:1px solid var(--line);padding:18px clamp(4px,2vw,16px) 2px;text-align:center;font-size:clamp(16px,2.7vw,21px);line-height:1.45;color:#eee8dd}
 .summary strong{color:var(--gold2);font-weight:600}
+.icon-sum{width:.9em;height:.9em;vertical-align:-0.12em;margin-right:.22em;fill:var(--gold)}
 .footer{margin-top:14px;text-align:center;color:#746e67;font-family:"Cinzel",serif;font-size:8px;letter-spacing:.18em;text-transform:uppercase}
 @media(max-width:560px){
 body{align-items:flex-start;padding:12px;padding-top:max(12px,env(safe-area-inset-top))}
@@ -130,7 +131,16 @@ body{align-items:flex-start;padding:12px;padding-top:max(12px,env(safe-area-inse
 (function(){
   var lastId=null,hideTimer=null,HIDE_AFTER_MS=45000;
   function esc(s){return String(s ?? "").replace(/[&<>"]/g,function(m){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[m]})}
-  function md(s){return esc(s).replace(/\\*\\*(.+?)\\*\\*/g,"<strong>$1</strong>").replace(/\\n/g,"<br/>")}
+  var ICONS={
+    spark:'<svg class="icon-sum" viewBox="0 0 24 24"><path d="M12 2l2.4 6.6L21 11l-6.6 2.4L12 20l-2.4-6.6L3 11l6.6-2.4z"/></svg>',
+    heart:'<svg class="icon-sum" viewBox="0 0 24 24"><path d="M12 20.6s-7.1-4.35-9.5-8.8C.9 8.4 2.6 5 6 5c2 0 3.3 1 4 2.2C10.7 6 12 5 14 5c3.4 0 5.1 3.4 3.5 6.8-2.4 4.45-9.5 8.8-9.5 8.8z"/></svg>',
+    briefcase:'<svg class="icon-sum" viewBox="0 0 24 24"><path d="M9 4h6a2 2 0 0 1 2 2v1h2.25A1.75 1.75 0 0 1 21 8.75v9.5A1.75 1.75 0 0 1 19.25 20H4.75A1.75 1.75 0 0 1 3 18.25v-9.5A1.75 1.75 0 0 1 4.75 7H7V6a2 2 0 0 1 2-2zm0 3h6V6H9v1zM3 12h18v1.6c0 .77-.63 1.4-1.4 1.4H4.4c-.77 0-1.4-.63-1.4-1.4V12z"/></svg>',
+    crystal:'<svg class="icon-sum" viewBox="0 0 24 24"><circle cx="12" cy="10" r="6.4"/><path d="M4.2 20.2 6 16.6h12l1.8 3.6z" opacity=".55"/></svg>'
+  };
+  function md(s){
+    var t=esc(s).replace(/\\*\\*(.+?)\\*\\*/g,"<strong>$1</strong>").replace(/\\n/g,"<br/>");
+    return t.replace(/::(spark|heart|briefcase|crystal)::/g,function(_,n){return ICONS[n]||""});
+  }
   function render(draw){
     var stage=document.getElementById("stage"),viewer=document.getElementById("viewer"),gift=document.getElementById("gift"),row=document.getElementById("cards-row"),summary=document.getElementById("summary");
     viewer.innerHTML="Ramalan untuk <strong>"+esc(draw.username||"Penonton")+"</strong>";
