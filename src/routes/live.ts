@@ -78,44 +78,44 @@ export function liveOverlayPage(): string {
 <style>
 :root{--bg:#08070b;--panel:rgba(20,17,24,.82);--gold:#d9b45a;--gold2:#f0d58a;--cream:#f5f0e7;--muted:#a9a19a;--line:rgba(217,180,90,.24);--shadow:0 24px 70px rgba(0,0,0,.42)}
 *{margin:0;padding:0;box-sizing:border-box}
-html,body{width:100%;min-height:100%;background:transparent}
-body{font-family:"Cormorant Garamond",serif;color:var(--cream);display:flex;align-items:center;justify-content:center;padding:clamp(12px,3vw,32px);overflow-x:hidden}
-#stage{width:min(1040px,100%);display:none;position:relative;padding:clamp(18px,4vw,34px);border:1px solid var(--line);border-radius:28px;background:linear-gradient(145deg,rgba(15,12,20,.92),rgba(7,6,10,.76));box-shadow:var(--shadow),inset 0 1px rgba(255,255,255,.05);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px)}
-#stage:before{content:"";position:absolute;inset:8px;border:1px solid rgba(217,180,90,.08);border-radius:21px;pointer-events:none}
+html,body{width:100%;height:100%;min-height:100%;margin:0;background:transparent}
+body{font-family:"Cormorant Garamond",serif;color:var(--cream);display:flex;align-items:center;justify-content:center;overflow:hidden}
+#stage{width:100%;height:100%;max-width:none;max-height:none;aspect-ratio:9/16;display:none;position:relative;padding:clamp(28px,4vw,64px) clamp(20px,4vw,56px);border:0;border-radius:0;background:linear-gradient(145deg,rgba(15,12,20,.96),rgba(7,6,10,.90));box-shadow:none;backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);overflow:hidden}
+#stage:before{content:"";position:absolute;inset:14px;border:1px solid rgba(217,180,90,.10);border-radius:24px;pointer-events:none}
 #stage.show{display:block;animation:rise .55s cubic-bezier(.2,.8,.2,1)}
 @keyframes rise{from{opacity:0;transform:translateY(18px) scale(.985)}to{opacity:1;transform:none}}
-.kicker{display:flex;align-items:center;justify-content:center;gap:8px;color:var(--gold);font-family:"Cinzel",serif;font-size:clamp(9px,1.7vw,12px);font-weight:600;letter-spacing:.22em;text-transform:uppercase;text-align:center}
+.kicker{display:flex;align-items:center;justify-content:center;gap:8px;color:var(--gold);font-family:"Cinzel",serif;font-size:clamp(10px,1.7vw,15px);font-weight:600;letter-spacing:.22em;text-transform:uppercase;text-align:center}
 .kicker-mark{display:inline-block;width:14px;height:14px;flex:none;vertical-align:-2px;color:var(--gold)}
 .kicker:before,.kicker:after{content:"";height:1px;width:clamp(24px,7vw,70px);background:linear-gradient(90deg,transparent,var(--gold))}
 .kicker:after{background:linear-gradient(90deg,var(--gold),transparent)}
-.viewer{margin-top:8px;text-align:center;font-size:clamp(17px,3vw,25px);line-height:1.15}
+.viewer{margin-top:14px;text-align:center;font-size:clamp(20px,3.2vw,32px);line-height:1.15}
 .viewer strong{color:var(--gold2);font-weight:600}
-.gift{display:inline-flex;align-items:center;gap:7px;margin:10px auto 0;padding:6px 11px;border:1px solid rgba(217,180,90,.18);border-radius:999px;background:rgba(217,180,90,.07);color:#d8d0c4;font-size:clamp(12px,2.2vw,15px)}
+.gift{display:flex;align-items:center;justify-content:center;gap:7px;margin:12px auto 0;padding:6px 11px;border:1px solid rgba(217,180,90,.18);border-radius:999px;background:rgba(217,180,90,.07);color:#d8d0c4;font-size:clamp(12px,2.2vw,15px)}
 .gift-icon{display:inline-block;width:14px;height:14px;flex:none;vertical-align:-2px;color:var(--gold)}
-.cards-row{display:flex;justify-content:center;align-items:flex-start;gap:clamp(8px,1.8vw,18px);margin:clamp(18px,4vw,28px) auto;width:100%}
-.live-card{width:clamp(140px,24vw,220px);text-align:center}
+.cards-row{display:flex;justify-content:center;align-items:flex-start;gap:clamp(8px,1.8vw,22px);margin:clamp(28px,5vw,56px) auto;width:100%;max-width:100%}
+.live-card{width:clamp(150px,27vw,280px);max-width:31%;text-align:center}
 .card-frame{position:relative;padding:5px;border-radius:15px;background:linear-gradient(145deg,var(--gold2),#7e5a1d,var(--gold));box-shadow:0 15px 34px rgba(0,0,0,.46)}
 .live-card img{display:block;width:100%;aspect-ratio:.652;object-fit:cover;border-radius:10px;box-shadow:inset 0 0 0 1px rgba(255,255,255,.08)}
 .live-card.reversed img{transform:rotate(180deg)}
 .pos{margin-top:9px;color:var(--gold);font-family:"Cinzel",serif;font-size:clamp(9px,1.7vw,12px);letter-spacing:.13em;text-transform:uppercase}
 .name{margin-top:4px;font-size:clamp(15px,2.7vw,21px);line-height:1.05}
 .state{display:inline-block;margin-top:4px;font-size:11px;color:#9f968b;font-style:italic}
-.summary{border-top:1px solid var(--line);padding:18px clamp(4px,2vw,16px) 2px;text-align:center;font-size:clamp(16px,2.7vw,21px);line-height:1.45;color:#eee8dd}
+.summary{border-top:1px solid var(--line);padding:22px clamp(4px,2vw,18px) 2px;text-align:center;font-size:clamp(18px,2.8vw,26px);line-height:1.45;color:#eee8dd}
 .summary strong{color:var(--gold2);font-weight:600}
 .icon-sum{width:.9em;height:.9em;vertical-align:-0.12em;margin-right:.22em;fill:var(--gold)}
 .footer{margin-top:14px;text-align:center;color:#746e67;font-family:"Cinzel",serif;font-size:8px;letter-spacing:.18em;text-transform:uppercase}
-@media(max-width:560px){
-body{align-items:flex-start;padding:12px;padding-top:max(12px,env(safe-area-inset-top))}
-#stage{border-radius:22px;padding:17px 14px 14px}
-#stage:before{inset:5px;border-radius:17px}
-.cards-row{gap:10px;margin:17px auto 18px}
-.live-card{width:calc((100% - 20px)/3);max-width:150px}
+@media(max-aspect-ratio:3/4){
+body{align-items:center}
+#stage{width:100vw;height:177.7778vw;max-height:100vh;max-width:56.25vh;padding:28px 14px 20px}
+#stage:before{inset:10px;border-radius:18px}
+.cards-row{gap:7px;margin:24px auto 22px}
+.live-card{width:calc((100% - 14px)/3);max-width:none}
 .card-frame{padding:4px;border-radius:13px}
 .live-card img{border-radius:9px}
 .summary{font-size:16px;line-height:1.42;padding-top:15px}
 .footer{font-size:7px}
 }
-@media(max-width:360px){
+@media(max-width:360px), (max-height:600px) and (orientation:landscape){
 #stage{padding:14px 10px 12px}
 .viewer{font-size:18px}
 .name{font-size:14px}
