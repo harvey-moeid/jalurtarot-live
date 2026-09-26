@@ -74,7 +74,7 @@ export function liveOverlayPage(): string {
 *{margin:0;padding:0;box-sizing:border-box}
 html,body{width:100%;min-height:100%;background:transparent}
 body{font-family:"Cormorant Garamond",serif;color:var(--cream);display:flex;align-items:center;justify-content:center;padding:clamp(12px,3vw,32px);overflow-x:hidden}
-#stage{width:min(960px,100%);display:none;position:relative;padding:clamp(18px,4vw,34px);border:1px solid var(--line);border-radius:28px;background:linear-gradient(145deg,rgba(15,12,20,.92),rgba(7,6,10,.76));box-shadow:var(--shadow),inset 0 1px rgba(255,255,255,.05);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px)}
+#stage{width:min(1040px,100%);display:none;position:relative;padding:clamp(18px,4vw,34px);border:1px solid var(--line);border-radius:28px;background:linear-gradient(145deg,rgba(15,12,20,.92),rgba(7,6,10,.76));box-shadow:var(--shadow),inset 0 1px rgba(255,255,255,.05);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px)}
 #stage:before{content:"";position:absolute;inset:8px;border:1px solid rgba(217,180,90,.08);border-radius:21px;pointer-events:none}
 #stage.show{display:block;animation:rise .55s cubic-bezier(.2,.8,.2,1)}
 @keyframes rise{from{opacity:0;transform:translateY(18px) scale(.985)}to{opacity:1;transform:none}}
@@ -86,13 +86,13 @@ body{font-family:"Cormorant Garamond",serif;color:var(--cream);display:flex;alig
 .viewer strong{color:var(--gold2);font-weight:600}
 .gift{display:inline-flex;align-items:center;gap:7px;margin:10px auto 0;padding:6px 11px;border:1px solid rgba(217,180,90,.18);border-radius:999px;background:rgba(217,180,90,.07);color:#d8d0c4;font-size:clamp(12px,2.2vw,15px)}
 .gift-icon{display:inline-flex;align-items:center;color:var(--gold)}
-.cards-row{display:flex;justify-content:center;align-items:flex-start;gap:clamp(10px,2.2vw,22px);margin:clamp(18px,4vw,28px) auto;width:100%}
-.live-card{width:clamp(112px,19vw,170px);text-align:center}
-.card-frame{position:relative;padding:4px;border-radius:13px;background:linear-gradient(145deg,var(--gold2),#7e5a1d,var(--gold));box-shadow:0 15px 34px rgba(0,0,0,.46)}
-.live-card img{display:block;width:100%;aspect-ratio:.652;object-fit:cover;border-radius:9px;box-shadow:inset 0 0 0 1px rgba(255,255,255,.08)}
+.cards-row{display:flex;justify-content:center;align-items:flex-start;gap:clamp(8px,1.8vw,18px);margin:clamp(18px,4vw,28px) auto;width:100%}
+.live-card{width:clamp(140px,24vw,220px);text-align:center}
+.card-frame{position:relative;padding:5px;border-radius:15px;background:linear-gradient(145deg,var(--gold2),#7e5a1d,var(--gold));box-shadow:0 15px 34px rgba(0,0,0,.46)}
+.live-card img{display:block;width:100%;aspect-ratio:.652;object-fit:cover;border-radius:10px;box-shadow:inset 0 0 0 1px rgba(255,255,255,.08)}
 .live-card.reversed img{transform:rotate(180deg)}
-.pos{margin-top:9px;color:var(--gold);font-family:"Cinzel",serif;font-size:clamp(8px,1.6vw,11px);letter-spacing:.13em;text-transform:uppercase}
-.name{margin-top:4px;font-size:clamp(14px,2.5vw,19px);line-height:1.05}
+.pos{margin-top:9px;color:var(--gold);font-family:"Cinzel",serif;font-size:clamp(9px,1.7vw,12px);letter-spacing:.13em;text-transform:uppercase}
+.name{margin-top:4px;font-size:clamp(15px,2.7vw,21px);line-height:1.05}
 .state{display:inline-block;margin-top:4px;font-size:11px;color:#9f968b;font-style:italic}
 .summary{border-top:1px solid var(--line);padding:18px clamp(4px,2vw,16px) 2px;text-align:center;font-size:clamp(16px,2.7vw,21px);line-height:1.45;color:#eee8dd}
 .summary strong{color:var(--gold2);font-weight:600}
@@ -101,18 +101,18 @@ body{font-family:"Cormorant Garamond",serif;color:var(--cream);display:flex;alig
 body{align-items:flex-start;padding:12px;padding-top:max(12px,env(safe-area-inset-top))}
 #stage{border-radius:22px;padding:17px 14px 14px}
 #stage:before{inset:5px;border-radius:17px}
-.cards-row{gap:8px;margin:17px auto 18px}
-.live-card{width:calc((100% - 16px)/3);max-width:126px}
-.card-frame{padding:3px;border-radius:11px}
-.live-card img{border-radius:8px}
+.cards-row{gap:10px;margin:17px auto 18px}
+.live-card{width:calc((100% - 20px)/3);max-width:150px}
+.card-frame{padding:4px;border-radius:13px}
+.live-card img{border-radius:9px}
 .summary{font-size:16px;line-height:1.42;padding-top:15px}
 .footer{font-size:7px}
 }
 @media(max-width:360px){
 #stage{padding:14px 10px 12px}
 .viewer{font-size:18px}
-.name{font-size:13px}
-.pos{font-size:7px}
+.name{font-size:14px}
+.pos{font-size:8px}
 .summary{font-size:15px}
 }
 </style>
