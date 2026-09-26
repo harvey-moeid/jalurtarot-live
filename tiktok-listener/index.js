@@ -4,8 +4,16 @@
  * Listener berjalan terpisah dari Cloudflare Worker, misalnya di Termux.
  * Tugas:
  *   1. Terhubung ke live TikTok berdasarkan username.
- *   2. Mendengarkan event gift.
- *   3. Mengirim gift yang cocok ke POST /api/live/trigger.
+ *   2. Mendengarkan event gift & like.
+ *   3. Mengirim trigger yang cocok ke POST /api/live/trigger.
+ *
+ * Aturan trigger (rev11):
+ *   - GIFT: dipicu oleh nilai koin gift (diamondCount x repeatCount), BUKAN
+ *     nama gift tertentu saja - kecuali TARGET_GIFT_NAME diisi nama spesifik.
+ *     Nilai koin >= THREE_CARD_MIN_VALUE -> tarik 3 kartu, selain itu 1 kartu.
+ *   - LIKE: setiap total like di sesi live menembus kelipatan LIKE_MILESTONE
+ *     (mis. 1000, 2000, ...), otomatis tarik 1 kartu untuk pengirim like
+ *     terakhir pada event tersebut.
  *
  * Jalankan:
  *   npm install
@@ -20,10 +28,11 @@ const {
   TIKTOK_USERNAME,
   WORKER_URL,
   LIVE_SECRET,
-  TARGET_GIFT_NAME,
-  MIN_GIFT_COUNT = '1',
+  TARGET_GIFT_NAME = '',
+  MIN_GIFT_VALUE = '1',
+  THREE_CARD_MIN_VALUE = '5',
+  LIKE_MILESTONE = '1000',
   DEFAULT_SPREAD = 'single',
-  THREE_CARD_THRESHOLD = '',
   SIGN_API_KEY = '',
 } = process.env;
 
@@ -37,37 +46,42 @@ function requireEnv(name, value) {
 requireEnv('TIKTOK_USERNAME', TIKTOK_USERNAME);
 requireEnv('WORKER_URL', WORKER_URL);
 requireEnv('LIVE_SECRET', LIVE_SECRET);
-requireEnv('TARGET_GIFT_NAME', TARGET_GIFT_NAME);
 
 const username = TIKTOK_USERNAME.trim().replace(/^@+/, '');
 const workerUrl = WORKER_URL.trim().replace(/\/+$/, '');
-const targetGiftLower = TARGET_GIFT_NAME.trim().toLowerCase();
 
-const minGiftCount = Number.parseInt(MIN_GIFT_COUNT, 10);
-const threeCardThreshold = THREE_CARD_THRESHOLD.trim()
-  ? Number.parseInt(THREE_CARD_THRESHOLD, 10)
-  : null;
+// Kosong atau "*" berarti: semua nama gift diterima (dibedakan lewat nilai koin, bukan nama).
+const targetGiftRaw = TARGET_GIFT_NAME.trim();
+const targetGiftLower = targetGiftRaw && targetGiftRaw !== '*' ? targetGiftRaw.toLowerCase() : null;
 
-if (!Number.isInteger(minGiftCount) || minGiftCount < 1) {
-  console.error('ERROR: MIN_GIFT_COUNT harus berupa angka >= 1.');
+const minGiftValue = Number.parseInt(MIN_GIFT_VALUE, 10);
+const threeCardMinValue = Number.parseInt(THREE_CARD_MIN_VALUE, 10);
+const likeMilestone = LIKE_MILESTONE.trim() ? Number.parseInt(LIKE_MILESTONE, 10) : 0;
+
+if (!Number.isInteger(minGiftValue) || minGiftValue < 0) {
+  console.error('ERROR: MIN_GIFT_VALUE harus berupa angka >= 0.');
   process.exit(1);
 }
 
-if (threeCardThreshold !== null && (!Number.isInteger(threeCardThreshold) || threeCardThreshold < 1)) {
-  console.error('ERROR: THREE_CARD_THRESHOLD harus berupa angka >= 1 atau dikosongkan.');
+if (!Number.isInteger(threeCardMinValue) || threeCardMinValue < 1) {
+  console.error('ERROR: THREE_CARD_MIN_VALUE harus berupa angka >= 1.');
+  process.exit(1);
+}
+
+if (LIKE_MILESTONE.trim() && (!Number.isInteger(likeMilestone) || likeMilestone < 1)) {
+  console.error('ERROR: LIKE_MILESTONE harus berupa angka >= 1 atau dikosongkan.');
   process.exit(1);
 }
 
 const defaultSpread = DEFAULT_SPREAD === 'three-card' ? 'three-card' : 'single';
 
 console.log('Jalur Tarot - Bot TikTok Live');
-console.log(`  Akun target    : @${username}`);
-console.log(`  Worker         : ${workerUrl}`);
-console.log(`  Gift pemicu    : "${TARGET_GIFT_NAME.trim()}" (min ${minGiftCount}x)`);
-console.log(`  Spread default : ${defaultSpread}`);
-if (threeCardThreshold) {
-  console.log(`  Three-card     : otomatis jika >= ${threeCardThreshold}x`);
-}
+console.log(`  Akun target      : @${username}`);
+console.log(`  Worker           : ${workerUrl}`);
+console.log(`  Gift pemicu      : ${targetGiftLower ? `"${targetGiftRaw}" saja` : 'SEMUA gift (dibedakan lewat nilai koin)'}`);
+console.log(`  Nilai gift min   : ${minGiftValue} koin`);
+console.log(`  Ambang 3 kartu   : >= ${threeCardMinValue} koin (di bawah itu -> 1 kartu)`);
+console.log(`  Like milestone   : ${likeMilestone ? `setiap ${likeMilestone} like -> 1 kartu` : 'nonaktif'}`);
 console.log('');
 
 let connection;
@@ -81,6 +95,9 @@ let connected = false;
 const recentTriggers = new Map();
 const DEDUPE_TTL_MS = 15000;
 
+// Index kelipatan like yang sudah pernah memicu draw (reset tiap listener dijalankan ulang).
+let lastLikeMilestoneIndex = 0;
+
 function scheduleReconnect(delayMs, reason) {
   if (shuttingDown || reconnectTimer || reconnecting) return;
 
@@ -91,14 +108,8 @@ function scheduleReconnect(delayMs, reason) {
   }, delayMs);
 }
 
-// FIX: template literal sebelumnya meng-escape "$" (\${giftName}, \${giftCount})
-// jadi giftName & giftCount TIDAK pernah ter-interpolasi - dedupe key selalu
-// jadi "sender|${giftName}|${giftCount}" literal, hanya beda per-sender.
-// Akibatnya: gift KEDUA (nama/jumlah beda) dari sender yang sama dalam 15 detik
-// salah dianggap duplikat dan diabaikan. Sekarang giftName & giftCount ikut
-// dipakai membedakan key, sesuai maksud aslinya.
-function makeTriggerKey({ username: sender, giftName, giftCount }) {
-  return `${sender}|${giftName}|${giftCount}`.toLowerCase();
+function makeTriggerKey({ username: sender, kind, giftName, giftCount }) {
+  return `${kind}|${sender}|${giftName}|${giftCount}`.toLowerCase();
 }
 
 function isDuplicateTrigger(key) {
@@ -116,9 +127,8 @@ function isDuplicateTrigger(key) {
   return false;
 }
 
-function pickSpread(giftCount) {
-  if (threeCardThreshold && giftCount >= threeCardThreshold) return 'three-card';
-  return defaultSpread;
+function pickSpreadByValue(coinValue) {
+  return coinValue >= threeCardMinValue ? 'three-card' : 'single';
 }
 
 async function triggerDraw({ sender, giftName, giftCount, spreadId }) {
@@ -178,29 +188,52 @@ function attachListeners() {
     if (data.giftType === 1 && !data.repeatEnd) return;
 
     const giftName = String(data.giftName || '').trim();
-    const giftCount = Number(data.repeatCount) || 1;
+    const repeatCount = Number(data.repeatCount) || 1;
+    const diamondCount = Number(data.diamondCount) || 0;
+    const coinValue = diamondCount * repeatCount;
     const sender = String(data.user?.uniqueId || data.uniqueId || 'Penonton').trim() || 'Penonton';
 
-    if (giftName.toLowerCase() !== targetGiftLower) return;
-    if (giftCount < minGiftCount) return;
+    if (targetGiftLower && giftName.toLowerCase() !== targetGiftLower) return;
+    if (coinValue < minGiftValue) return;
 
-    const key = makeTriggerKey({ sender, giftName, giftCount });
+    const key = makeTriggerKey({ username: sender, kind: 'gift', giftName, giftCount: repeatCount });
     if (isDuplicateTrigger(key)) {
-      console.log(`DUPLICATE: ${sender} - ${giftName} x${giftCount} diabaikan.`);
+      console.log(`DUPLICATE: ${sender} - ${giftName} x${repeatCount} diabaikan.`);
       return;
     }
 
-    console.log(`GIFT: ${sender} mengirim ${giftName} x${giftCount}`);
+    console.log(`GIFT: ${sender} mengirim ${giftName} x${repeatCount} (${coinValue} koin)`);
     void triggerDraw({
       sender,
       giftName,
-      giftCount,
-      spreadId: pickSpread(giftCount),
+      giftCount: repeatCount,
+      spreadId: pickSpreadByValue(coinValue),
+    });
+  });
+
+  connection.on(WebcastEvent.LIKE, (data) => {
+    if (!likeMilestone) return;
+
+    const total = Number(data.totalLikeCount) || 0;
+    const milestoneIndex = Math.floor(total / likeMilestone);
+    if (milestoneIndex <= lastLikeMilestoneIndex) return;
+
+    lastLikeMilestoneIndex = milestoneIndex;
+    const sender = String(data.user?.uniqueId || data.uniqueId || 'Penonton').trim() || 'Penonton';
+    const milestoneValue = milestoneIndex * likeMilestone;
+
+    console.log(`LIKE MILESTONE: total ${total} like (>= ${milestoneValue}), dipicu oleh ${sender}`);
+    void triggerDraw({
+      sender,
+      giftName: `${likeMilestone} Like`,
+      giftCount: milestoneValue,
+      spreadId: 'single',
     });
   });
 
   connection.on(WebcastEvent.CONNECTED, (state) => {
     connected = true;
+    lastLikeMilestoneIndex = 0;
     console.log(`CONNECTED: @${username} (roomId: ${state.roomId})`);
   });
 
