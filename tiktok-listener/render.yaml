@@ -13,7 +13,7 @@ services:
     autoDeploy: true
     envVars:
       - key: TIKTOK_USERNAME
-        sync: false
+        value: "jalurtarot"
       - key: WORKER_URL
         sync: false
       - key: LIVE_SECRET
@@ -43,7 +43,7 @@ services:
     autoDeploy: true
     envVars:
       - key: TIKTOK_USERNAME
-        sync: false
+        value: "jalurtarot"
       - key: RENDER_API_KEY
         sync: false
       - key: LISTENER_SERVICE_NAME
