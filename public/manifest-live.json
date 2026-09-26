@@ -1,0 +1,27 @@
+{
+  "name": "JalurTarot Live Overlay",
+  "short_name": "Tarot Overlay",
+  "description": "Overlay OBS Ramalan Live - kartu tampil otomatis saat gift TikTok masuk",
+  "start_url": "/live",
+  "scope": "/live",
+  "display": "fullscreen",
+  "background_color": "#08070b",
+  "theme_color": "#08070b",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["entertainment"],
+  "lang": "id"
+}
