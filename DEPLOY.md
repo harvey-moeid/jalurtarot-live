@@ -1,6 +1,14 @@
-# Deploy JalurTarot — Panduan Lengkap
+# Deploy JalurTarot Live - Panduan Lengkap
 
-Stack: **Cloudflare Workers** + **KV** + **Static Assets** + **OpenRouter API**
+Stack saat ini (rev 8+): **Cloudflare Workers** + **KV** + **Static Assets**.
+Tidak ada LLM/AI, tidak ada API key eksternal, tidak ada sistem kredit -
+semua interpretasi 100% statis dari data di repo. Fitur utama: Ramalan Live
+untuk siaran TikTok Live (lihat `PROJECT_CONTEXT.md` untuk detail arsitektur).
+
+> Panduan ini ditulis ulang di rev 9. Versi sebelumnya masih menjelaskan
+> arsitektur lama berbasis OpenRouter/LLM dan sistem kredit yang sudah
+> dihapus total di rev 8 - jangan pakai screenshot/salinan lama dari
+> dokumen ini.
 
 ---
 
@@ -12,15 +20,18 @@ Stack: **Cloudflare Workers** + **KV** + **Static Assets** + **OpenRouter API**
 | npm | 9+ | bundled dengan Node |
 | Wrangler CLI | 4.x | `npm i -g wrangler` |
 | Akun Cloudflare | Free tier cukup | https://cloudflare.com |
-| OpenRouter API Key | — | https://openrouter.ai |
+
+Tidak perlu API key eksternal apa pun untuk situs utama (Worker). API key
+hanya relevan kalau kamu memakai `SIGN_API_KEY` opsional untuk listener
+TikTok (lihat bagian Bot TikTok Live di bawah).
 
 ---
 
 ## 1. Clone & Install
 
 ```bash
-git clone https://github.com/harvey-moeid/jalurtarotfree.git
-cd jalurtarotfree
+git clone https://github.com/harvey-moeid/jalurtarot-live.git
+cd jalurtarot-live
 npm install
 ```
 
@@ -32,7 +43,7 @@ npm install
 wrangler login
 ```
 
-Browser akan terbuka → login akun Cloudflare → authorize Wrangler.
+Browser akan terbuka, login akun Cloudflare, authorize Wrangler.
 
 Verifikasi:
 
@@ -42,125 +53,68 @@ wrangler whoami
 
 ---
 
-## 3. Buat KV Namespace
+## 3. KV Namespace
 
-KV menyimpan credit state user (10 kredit / 7 hari per IP). Kartu harian **bebas kredit**.
+KV dipakai untuk: state Ramalan Live (`live:current`), banner aktif, dan
+IP blacklist. (Bukan untuk sistem kredit - fitur itu sudah dihapus, kode
+legacy-nya masih ada tapi tidak dipakai.)
+
+Namespace produksi sudah dibuat dan tercatat di `wrangler.toml`:
+
+```toml
+[[kv_namespaces]]
+binding = "RATE_LIMIT_KV"
+id = "2545355c3b6e4012a1bddf0c66c181a0"
+preview_id = "2545355c3b6e4012a1bddf0c66c181a0"
+```
+
+Kalau kamu fork repo ini untuk instance baru (bukan lanjutin instance yang
+sudah ada), buat namespace sendiri:
 
 ```bash
 wrangler kv namespace create "RATE_LIMIT_KV"
 ```
 
-Output:
-
-```
-✅ Successfully created KV namespace RATE_LIMIT_KV
-[[kv_namespaces]]
-binding = "RATE_LIMIT_KV"
-id = "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
-```
-
-Salin `id`, update `wrangler.toml`:
-
-```toml
-[[kv_namespaces]]
-binding = "RATE_LIMIT_KV"
-id = "ID_DARI_OUTPUT_DI_ATAS"
-preview_id = "ID_DARI_OUTPUT_DI_ATAS"
-```
-
-> `preview_id` dipakai saat `wrangler dev`. Boleh pakai id yang sama, atau buat terpisah dengan `wrangler kv namespace create "RATE_LIMIT_KV_DEV"`.
+Output akan menampilkan `id` baru - salin ke `wrangler.toml`, ganti
+`binding`, `id`, dan `preview_id` sesuai output tersebut.
 
 ---
 
-## 4. Set API Key via Cloudflare Secrets
+## 4. Set Secrets
 
-**Jangan taruh API key di `wrangler.toml`** — akan ter-commit ke Git.
+**Jangan taruh secret di `wrangler.toml`** - file itu ter-commit ke Git.
 
 ```bash
-wrangler secret put OPENROUTER_API_KEY
+wrangler secret put ADMIN_PASSWORD
+wrangler secret put LIVE_SECRET
 ```
 
-Tempel API key dari https://openrouter.ai/keys → Enter.
+- `ADMIN_PASSWORD` - password untuk masuk ke `/admin`. **Wajib di-set**
+  sebelum production; kalau kosong, kode fallback ke password default
+  `changeme` yang tertulis di source (`src/routes/admin.ts`) - siapa pun
+  yang tahu itu bisa masuk admin panel.
+- `LIVE_SECRET` - token yang harus dikirim bot `tiktok-listener/` di
+  header `X-Live-Secret` setiap memanggil `POST /api/live/trigger`. Isi
+  bebas, buat acak, contoh: `openssl rand -hex 24`. Wajib sama persis
+  dengan `LIVE_SECRET` di `.env` / environment variable listener.
 
 Verifikasi:
 
 ```bash
 wrangler secret list
-# Harus muncul: OPENROUTER_API_KEY
+# Harus muncul: ADMIN_PASSWORD, LIVE_SECRET
 ```
 
-Alternatif lewat **Cloudflare Dashboard**: Workers & Pages → pilih worker → **Settings** → **Variables and Secrets** → Add → Type: Secret → Name: `OPENROUTER_API_KEY` → Value: key kamu → Save.
+Alternatif lewat Cloudflare Dashboard: Workers & Pages -> pilih worker ->
+Settings -> Variables and Secrets -> Add -> Type: Secret.
+
+> Catatan CI/CD: workflow `.github/workflows/ci.yml` deploy pakai
+> `wrangler deploy --keep-vars`, supaya secret yang di-set lewat cara di
+> atas tidak ikut terhapus tiap kali auto-deploy jalan.
 
 ---
 
-## 5. Pilih Model LLM (Opsional)
-
-Edit `FALLBACK_LLM_MODEL` di `wrangler.toml`. Default sudah terisi.
-
-### Model Gratis (tanpa biaya token)
-
-> ⚠️ Model gratis bisa dihapus sewaktu-waktu dari OpenRouter. Selalu cek https://openrouter.ai/models (filter: Free).
-
-| Model ID | Ukuran | Keterangan |
-|----------|--------|------------|
-| `nvidia/nemotron-3-ultra-550b-a55b:free` | 550B | Terbaik untuk teks panjang, paling kapabel |
-| `google/gemma-4-31b-it:free` | 31B | Dari Google, stabil, vision support |
-| `openrouter/free` | auto | Auto-pilih model gratis yang tersedia — paling aman dari perubahan |
-
-### Model Berbayar (direkomendasikan untuk production)
-
-| Model ID | Harga (per 1M token) | Keterangan |
-|----------|----------------------|------------|
-| `google/gemini-2.0-flash-001` | ~$0.10 / $0.40 | **Default** — cepat, murah, bagus |
-| `google/gemini-2.5-flash-preview` | ~$0.15 / $0.60 | Upgrade dari default, reasoning lebih baik |
-| `anthropic/claude-3-5-haiku` | $1 / $5 | Interpretasi paling humanize dan dalam |
-| `openai/gpt-4o-mini` | $0.15 / $0.60 | Alternatif solid |
-
-```toml
-# wrangler.toml
-FALLBACK_LLM_MODEL = "nvidia/nemotron-3-ultra-550b-a55b:free"
-# atau
-FALLBACK_LLM_MODEL = "openrouter/free"
-# atau
-FALLBACK_LLM_MODEL = "google/gemini-2.5-flash-preview"
-```
-
-### Matikan LLM (mode static saja)
-
-```toml
-ENABLE_FALLBACK_LLM = "false"
-```
-
----
-
-## 6. Verifikasi wrangler.toml Final
-
-```toml
-name = "jalurtarotfree"
-main = "src/index.ts"
-compatibility_date = "2025-04-01"
-compatibility_flags = ["nodejs_compat"]
-
-[assets]
-directory = "./public"
-binding = "ASSETS"
-not_found_handling = "none"
-
-[[kv_namespaces]]
-binding = "RATE_LIMIT_KV"
-id = "ID_KV_PRODUCTION_KAMU"
-preview_id = "ID_KV_PREVIEW_KAMU"
-
-[vars]
-ENABLE_FALLBACK_LLM = "true"
-FALLBACK_LLM_MODEL = "nvidia/nemotron-3-ultra-550b-a55b:free"
-OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
-# OPENROUTER_API_KEY di Cloudflare Secrets — jangan taruh di sini
-```
-
----
-
-## 7. Development Lokal
+## 5. Development Lokal
 
 ```bash
 npm run dev
@@ -171,92 +125,88 @@ Secrets tidak otomatis tersedia di lokal. Buat file `.dev.vars`:
 
 ```bash
 cp .dev.vars.example .dev.vars
-# Edit .dev.vars, isi dengan API key kamu
+# Edit .dev.vars, isi ADMIN_PASSWORD dan LIVE_SECRET
 ```
 
-Isi `.dev.vars`:
-
-```
-OPENROUTER_API_KEY=sk-or-v1-KEYMU_DI_SINI
-```
-
-> `.dev.vars` sudah masuk `.gitignore` — tidak akan ter-commit.
+`.dev.vars` sudah masuk `.gitignore` - tidak akan ter-commit.
 
 ---
 
-## 8. Deploy ke Production
+## 6. Deploy ke Production
+
+Manual:
 
 ```bash
 npm run deploy
 ```
 
-Output sukses:
+Otomatis: setiap push ke branch `master` yang lolos `tsc --noEmit` akan
+ter-deploy otomatis lewat GitHub Actions (`.github/workflows/ci.yml`),
+asalkan secret `CLOUDFLARE_API_TOKEN` dan `CLOUDFLARE_ACCOUNT_ID` sudah
+di-set di GitHub repo Settings -> Secrets and variables -> Actions.
+
+Output sukses (manual):
 
 ```
-✅ Successfully deployed to Cloudflare Workers
-🌍 https://jalurtarotfree.YOUR-SUBDOMAIN.workers.dev
+Successfully deployed to Cloudflare Workers
+https://jalurtarot-live.YOUR-SUBDOMAIN.workers.dev
 ```
 
 ---
 
-## 9. Custom Domain (Opsional)
+## 7. Custom Domain (Opsional)
 
-**Via Dashboard:** Workers & Pages → pilih worker → Settings → Triggers → Add Custom Domain.
+**Via Dashboard:** Workers & Pages -> pilih worker -> Settings -> Triggers
+-> Add Custom Domain.
 
 **Via wrangler.toml:**
 
 ```toml
 [[routes]]
-pattern = "jalurtarot.com/*"
-zone_name = "jalurtarot.com"
+pattern = "namadomainmu.com/*"
+zone_name = "namadomainmu.com"
 ```
+
+Domain production saat ini: `jalurtarotfree.muidsoft.com` (lihat
+`PROJECT_CONTEXT.md`).
 
 ---
 
-## 10. Upload Card Images ke R2 (Jika Pakai CDN)
+## 8. Bot TikTok Live (tiktok-listener)
 
-Jika gambar kartu disimpan di Cloudflare R2 (bukan di `/public/cards/`):
+Worker di atas TIDAK bisa mendengarkan gift TikTok secara langsung
+(Cloudflare Workers tidak mendukung koneksi Node.js persisten). Untuk itu
+ada bot Node.js terpisah di folder `tiktok-listener/`, yang bisa dijalankan
+di salah satu dari:
+
+- **Termux (HP Android)** - gratis, lihat `tiktok-listener/TERMUX-SETUP.md`
+- **Render.com** - cloud, always-on, berbayar (plan Starter), lihat
+  `tiktok-listener/RENDER-SETUP.md`
+- **VPS sendiri** - jalankan dengan `pm2`/`systemd`
+
+Ringkas:
 
 ```bash
-wrangler r2 bucket create jalurtarot-assets
-wrangler r2 object put jalurtarot-assets/cards/ --file ./public/cards/ --recursive
+cd tiktok-listener
+npm install
+cp .env.example .env   # isi TIKTOK_USERNAME, WORKER_URL, LIVE_SECRET (sama dengan Worker), TARGET_GIFT_NAME
+npm start
 ```
 
-Pastikan R2 bucket punya custom domain `assets.jalurtarot.com` untuk akses publik.
+Detail lengkap ada di `tiktok-listener/README.md`.
 
 ---
 
-## Environment Variables — Referensi Lengkap
+## Environment Variables - Referensi Lengkap
 
-| Nama | Tipe | Deskripsi | Default |
-|------|------|-----------|---------|
-| `ENABLE_FALLBACK_LLM` | var | `"true"` aktifkan LLM, `"false"` pakai static | `"true"` |
-| `FALLBACK_LLM_MODEL` | var | Model ID OpenRouter | `"google/gemini-2.0-flash-001"` |
-| `OPENROUTER_BASE_URL` | var | Base URL OpenRouter | `"https://openrouter.ai/api/v1"` |
-| `OPENROUTER_API_KEY` | **secret** | API key — **wajib di Secrets** | — |
-| `RATE_LIMIT_KV` | binding | KV Namespace credit system | — |
+| Nama | Tipe | Deskripsi |
+|------|------|-----------|
+| `ADMIN_PASSWORD` | secret | Password `/admin`. Wajib di-set, jangan biarkan fallback `changeme`. |
+| `LIVE_SECRET` | secret | Token auth untuk `POST /api/live/trigger`, dipakai bot `tiktok-listener/`. |
+| `RATE_LIMIT_KV` | binding | KV Namespace - state live, banner, blacklist. |
 
----
-
-## Credit System
-
-- **10 kredit per 7 hari** per IP — rolling window (bukan reset tengah malam)
-- Kredit dikonsumsi **setelah** LLM berhasil merespons — LLM gagal tidak potong kredit
-- **Kartu harian bebas kredit** (`/daily` tidak makan kuota)
-- `pick-spread` (pemilihan susunan otomatis) tidak makan kredit
-- Data tersimpan di KV: key `credit:{IP}` → JSON `{ used, resetAt }`
-
-**Reset kredit user tertentu (manual):**
-
-```bash
-wrangler kv key delete --namespace-id=ID_KV_KAMU "credit:1.2.3.4"
-```
-
-**Lihat semua key credit:**
-
-```bash
-wrangler kv key list --namespace-id=ID_KV_KAMU --prefix="credit:"
-```
+Tidak ada environment variable publik (`[vars]`) yang wajib diisi - lihat
+catatan di `wrangler.toml`.
 
 ---
 
@@ -265,62 +215,62 @@ wrangler kv key list --namespace-id=ID_KV_KAMU --prefix="credit:"
 ### "KV namespace not found"
 Cek `id` di `wrangler.toml` harus sesuai dengan `wrangler kv namespace list`.
 
-### "OpenRouter 401 Unauthorized"
-Secret belum terset atau expired. Jalankan ulang `wrangler secret put OPENROUTER_API_KEY`.
+### Admin panel bisa dimasuki pakai password "changeme"
+`ADMIN_PASSWORD` belum di-set sebagai secret. Jalankan
+`wrangler secret put ADMIN_PASSWORD` lalu deploy ulang.
 
-### Model gratis error / tidak merespons
-Model gratis OpenRouter sering berubah ketersediaannya. Ganti ke `openrouter/free` untuk auto-fallback, atau pakai model berbayar.
+### `/api/live/trigger` selalu balas 401
+Cek `LIVE_SECRET` di Worker (`wrangler secret list`) sama persis dengan
+yang ada di `.env` / environment variable bot `tiktok-listener/`.
 
-### Interpretasi tidak muncul (spinning terus)
-Buka DevTools → Network → cek response `/api/interpret`. Kemungkinan: API key salah, model dihapus dari OpenRouter, atau kredit habis.
+### `/api/live/trigger` balas 500 "LIVE_SECRET belum di-set"
+Secret `LIVE_SECRET` belum ada di Worker production. Jalankan
+`wrangler secret put LIVE_SECRET`.
+
+### Overlay `/live` tidak pernah muncul saat live
+1. Cek listener menampilkan log `CONNECTED` dan `DRAW OK`.
+2. Buka `/admin/live`, coba tombol "Tarik Kartu Sekarang" untuk tes tanpa
+   TikTok - kalau overlay tetap tidak muncul, masalah ada di Worker/overlay,
+   bukan di listener.
+3. Pastikan `/live` dibuka sebagai Browser Source di OBS dengan latar
+   transparan diaktifkan.
 
 ### Build error TypeScript
 ```bash
 npm run build
 ```
-Pastikan semua type error resolved sebelum deploy.
+Pastikan semua type error resolved sebelum deploy. CI (`ci.yml`) juga akan
+menolak deploy kalau `tsc --noEmit` gagal.
 
 ### Worker size limit
-Cloudflare Workers free tier: maks 1 MB script. Kalau `cards.ts` terlalu besar, pertimbangkan serve data kartu dari KV atau R2.
-
-### iOS Safari — input tertutup keyboard
-Sudah di-fix dengan `100dvh` (dynamic viewport height). Pastikan deploy versi terbaru.
+Cloudflare Workers free tier: maksimal 1 MB script. Kalau `cards.ts` +
+`enrichedMeanings.ts` + `liveAspectMeanings.ts` mendekati batas ini,
+pertimbangkan serve sebagian data dari KV atau R2.
 
 ---
 
 ## Struktur File Penting
 
+Lihat bagian "Struktur Folder" di `PROJECT_CONTEXT.md` untuk detail
+lengkap tiap file. Ringkasnya:
+
 ```
-jalurtarotfree/
-├── src/
-│   ├── index.ts              # Entry point, routing utama
-│   ├── routes/
-│   │   ├── api.ts            # /api/interpret, /api/pick-spread, /api/config
-│   │   ├── agent.ts          # Halaman Oracle (chat multi-turn)
-│   │   ├── daily.ts          # Kartu harian (bebas kredit)
-│   │   ├── reading.ts        # Sesi ramalan manual (5 phase)
-│   │   ├── library.ts        # Perpustakaan 78 kartu
-│   │   ├── history.ts        # Riwayat sesi Oracle & Ramalan
-│   │   └── home.ts           # Halaman beranda
-│   └── lib/
-│       ├── cards.ts          # Data 78 kartu Rider-Waite-Smith
-│       ├── spreads.ts        # 6 spread definitions
-│       ├── interpret.ts      # Static interpretation engine (fallback)
-│       ├── daily.ts          # Daily card — deterministic djb2 hash
-│       ├── layout.ts         # HTML shell + CSS design system global
-│       ├── markdown.ts       # Shared markdown → HTML converter
-│       ├── draw.ts           # Card draw utilities (Fisher-Yates)
-│       └── types.ts          # TypeScript interfaces
-├── public/
-│   ├── cards/                # 78 gambar kartu (.webp)
-│   ├── icons/                # PWA icons (192px, 512px, svg)
-│   ├── manifest.json         # PWA manifest
-│   └── og-image.jpg          # OG image untuk link sharing
-├── .dev.vars.example         # Template env untuk dev lokal
-├── .gitignore                # node_modules, .dev.vars, .wrangler, dist
-├── wrangler.toml             # Konfigurasi Cloudflare Workers
-├── package.json
-└── tsconfig.json
+jalurtarot-live/
+  src/
+    index.ts        - entry point, routing utama
+    routes/          - api.ts, live.ts, admin.ts, home.ts, daily.ts,
+                       reading.ts, library.ts, history.ts, support.ts
+    lib/             - cards.ts, spreads.ts, interpret.ts,
+                       enrichedMeanings.ts, liveAspectMeanings.ts,
+                       live.ts, daily.ts, draw.ts, layout.ts,
+                       markdown.ts, icons.ts, types.ts, config.ts
+  tiktok-listener/   - bot Node.js terpisah (lihat README.md di folder ini)
+  public/            - gambar kartu, icon PWA, manifest
+  .dev.vars.example  - template env untuk dev lokal
+  .gitignore
+  wrangler.toml
+  package.json
+  tsconfig.json
 ```
 
 ---
@@ -332,4 +282,5 @@ git pull origin master
 npm run deploy
 ```
 
-KV, Secrets, dan custom domain tidak perlu setup ulang — sudah persisten di Cloudflare.
+Atau cukup push ke `master` dan biarkan GitHub Actions men-deploy otomatis.
+KV dan Secrets tidak perlu di-setup ulang - sudah persisten di Cloudflare.
