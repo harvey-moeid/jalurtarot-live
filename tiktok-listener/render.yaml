@@ -1,6 +1,5 @@
-# Model B: listener hanya ON saat TikTok LIVE.
-# Cron controller mengecek status LIVE setiap menit dan mengontrol listener.
-
+# Manual control: listener Render hanya berjalan saat tombol NYALAKAN dipakai.
+# Tidak ada Cron Job otomatis.
 services:
   - type: worker
     name: jalurtarot-tiktok-listener
@@ -30,23 +29,3 @@ services:
         value: "1000"
       - key: SIGN_API_KEY
         value: ""
-
-  - type: cron
-    name: jalurtarot-tiktok-controller
-    runtime: node
-    plan: starter
-    region: singapore
-    rootDir: tiktok-controller
-    buildCommand: npm install
-    startCommand: npm start
-    schedule: "*/1 * * * *"
-    autoDeploy: true
-    envVars:
-      - key: TIKTOK_USERNAME
-        value: "jalurtarot"
-      - key: RENDER_API_KEY
-        sync: false
-      - key: LISTENER_SERVICE_NAME
-        value: "jalurtarot-tiktok-listener"
-      - key: CHECK_TIMEOUT_MS
-        value: "20000"
