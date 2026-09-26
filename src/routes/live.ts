@@ -130,7 +130,7 @@ body{align-items:flex-start;padding:12px;padding-top:max(12px,env(safe-area-inse
 (function(){
   var lastId=null,hideTimer=null,HIDE_AFTER_MS=45000;
   function esc(s){return String(s ?? "").replace(/[&<>"]/g,function(m){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[m]})}
-  function md(s){return esc(s).replace(/\*\*(.+?)\*\*/g,"<strong>$1</strong>").replace(/\\n/g,"<br/>")}
+  function md(s){return esc(s).replace(/\\*\\*(.+?)\\*\\*/g,"<strong>$1</strong>").replace(/\\n/g,"<br/>")}
   function render(draw){
     var stage=document.getElementById("stage"),viewer=document.getElementById("viewer"),gift=document.getElementById("gift"),row=document.getElementById("cards-row"),summary=document.getElementById("summary");
     viewer.innerHTML="Ramalan untuk <strong>"+esc(draw.username||"Penonton")+"</strong>";
