@@ -5,6 +5,9 @@
   "description": "Bot pendengar TikTok Live untuk Ramalan Live Jalur Tarot — deteksi gift, trigger tarik kartu ke Worker",
   "type": "module",
   "main": "index.js",
+  "engines": {
+    "node": ">=18"
+  },
   "scripts": {
     "start": "node index.js"
   },

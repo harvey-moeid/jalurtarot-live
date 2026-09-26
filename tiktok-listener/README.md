@@ -4,48 +4,53 @@ Script Node.js terpisah yang mendengarkan live TikTok kamu, dan setiap ada
 gift target masuk, memanggil Worker (`/api/live/trigger`) supaya kartu
 ditarik & tampil di overlay OBS (`/live`).
 
-Ini **tidak** jalan di Cloudflare Worker — harus dijalankan di tempat lain
-yang bisa nyala terus selama live, misalnya HP kamu sendiri lewat Termux.
+Ini **tidak** jalan di Cloudflare Worker — listener butuh koneksi Node.js
+yang nyala terus selama live. Pilih salah satu tempat menjalankannya:
 
-## Setup di Termux (HP Android)
+| Opsi | Cocok untuk | Biaya | Panduan |
+|------|-------------|-------|---------|
+| **Termux (HP Android)** | Live dari HP sendiri, sesekali | Gratis | [TERMUX-SETUP.md](./TERMUX-SETUP.md) |
+| **Render.com (cloud)** | Live rutin, mau bot auto-restart tanpa jaga HP | Plan Starter – mulai ~$7/bulan (Background Worker tidak ada di Free) | [RENDER-SETUP.md](./RENDER-SETUP.md) |
+| **VPS/server sendiri** | Sudah punya VPS | Tergantung VPS | Lihat bagian di bawah |
 
-1. Install Termux dari F-Droid (bukan Play Store, sudah lama tidak diupdate di sana).
-2. Buka Termux, lalu:
-   ```bash
-   pkg update && pkg upgrade
-   pkg install nodejs git
-   ```
-3. Pindahkan/clone folder `tiktok-listener/` ini ke HP (misal via `termux-setup-storage`
-   lalu copy dari folder Download, atau `git clone` kalau repo-nya di GitHub).
-4. Masuk ke foldernya:
-   ```bash
-   cd tiktok-listener
-   npm install
-   cp .env.example .env
-   nano .env   # isi TIKTOK_USERNAME, WORKER_URL, LIVE_SECRET, TARGET_GIFT_NAME, dst
-   ```
-5. **Penting:** `LIVE_SECRET` di `.env` ini harus **sama persis** dengan yang
-   kamu set di Worker lewat:
-   ```bash
-   wrangler secret put LIVE_SECRET
-   ```
-6. Jalankan:
-   ```bash
-   npm start
-   ```
-7. Biar tidak mati saat layar HP dikunci / mati layar:
-   ```bash
-   termux-wake-lock
-   ```
-   (jalankan sebelum `npm start`, atau di sesi Termux terpisah). Kalau mau bot
-   tetap hidup walau app Termux ditutup, pakai `tmux` atau `pm2`:
-   ```bash
-   pkg install tmux
-   tmux new -s tarot
-   npm start
-   # tekan Ctrl+B lalu D untuk detach (bot tetap jalan di background)
-   # buka lagi dengan: tmux attach -t tarot
-   ```
+> **Penting:** jalankan hanya **satu** listener dalam satu waktu untuk
+> akun TikTok yang sama (jangan Termux dan Render sekaligus). Dedupe gift
+> di kode ini hanya berlaku per-proses (in-memory), jadi dua listener yang
+> jalan bersamaan bisa memicu draw kartu dobel untuk gift yang sama.
+
+## Setup di Termux (HP Android) — gratis
+
+Ringkas:
+
+```bash
+pkg update && pkg upgrade
+pkg install nodejs git tmux
+git clone https://github.com/harvey-moeid/jalurtarot-live.git
+cd jalurtarot-live/tiktok-listener
+npm install
+cp .env.example .env
+nano .env   # isi TIKTOK_USERNAME, WORKER_URL, LIVE_SECRET, TARGET_GIFT_NAME, dst
+termux-wake-lock
+tmux new -s tarot
+npm start
+# Ctrl+B lalu D untuk detach (bot tetap jalan di background)
+```
+
+Panduan lengkap (troubleshooting, checklist, dll): [TERMUX-SETUP.md](./TERMUX-SETUP.md).
+
+## Setup di Render.com — cloud, always-on
+
+Listener jalan sebagai **Background Worker** di Render, tidak perlu HP
+atau laptop nyala. Repo ini sudah menyertakan `render.yaml` (Render
+Blueprint) supaya deploy tinggal beberapa klik.
+
+Ringkas:
+
+1. Buka [dashboard.render.com](https://dashboard.render.com) -> **New** -> **Blueprint** -> pilih repo `jalurtarot-live`.
+2. Isi `TIKTOK_USERNAME`, `WORKER_URL`, `LIVE_SECRET`, `TARGET_GIFT_NAME`.
+3. Klik **Apply**. Render build & jalankan otomatis (plan Starter, bukan Free — background worker berbayar).
+
+Panduan lengkap (termasuk cara deploy manual tanpa Blueprint, troubleshooting, checklist): [RENDER-SETUP.md](./RENDER-SETUP.md).
 
 ## Setup di VPS/server (alternatif)
 
@@ -73,3 +78,5 @@ Sama saja — install Node.js 18+, `npm install`, isi `.env`, lalu jalankan
   cek versi terbaru: `npm outdated` / `npm update`.
 - Untuk uji coba tanpa live TikTok beneran, buka `/admin/live` di Worker kamu
   — ada tombol "Tarik Kartu Sekarang" buat simulasi manual.
+- Kalau sering kena rate limit koneksi gratis (di Termux maupun Render),
+  isi `SIGN_API_KEY` dari https://www.eulerstream.com/ di `.env` / Environment Variables.
