@@ -1,22 +1,5 @@
-# Render Blueprint - Bot TikTok Live Jalur Tarot
-#
-# Cara pakai:
-#   1. Push repo ini ke GitHub (sudah).
-#   2. Buka https://dashboard.render.com -> New -> Blueprint.
-#   3. Pilih repo jalurtarot-live. Render otomatis mendeteksi file ini.
-#   4. Isi environment variable yang ditandai sync: false di bawah
-#      (TIKTOK_USERNAME, WORKER_URL, LIVE_SECRET, TARGET_GIFT_NAME).
-#   5. Klik Apply.
-#
-# PENTING - soal biaya:
-#   Background Worker TIDAK tersedia di plan Free Render (per 2026, Free
-#   hanya untuk Web Service/Static Site/Cron Job). Listener ini butuh proses
-#   yang nyala terus (koneksi TikTok Live persisten), jadi memakai plan
-#   "starter" (mulai sekitar $7/bulan). Kalau mau gratis, pakai Termux
-#   (lihat TERMUX-SETUP.md) - Render cocok kalau kamu mau bot auto-restart
-#   tanpa harus menjaga HP/laptop tetap nyala saat live.
-#
-# Detail lengkap & cara deploy tanpa Blueprint: lihat RENDER-SETUP.md
+# Model B: listener hanya ON saat TikTok LIVE.
+# Cron controller mengecek status LIVE setiap menit dan mengontrol listener.
 
 services:
   - type: worker
@@ -36,12 +19,34 @@ services:
       - key: LIVE_SECRET
         sync: false
       - key: TARGET_GIFT_NAME
-        sync: false
-      - key: MIN_GIFT_COUNT
+        value: "*"
+      - key: MIN_GIFT_VALUE
         value: "1"
+      - key: THREE_CARD_MIN_VALUE
+        value: "5"
       - key: DEFAULT_SPREAD
         value: "single"
-      - key: THREE_CARD_THRESHOLD
-        value: ""
+      - key: LIKE_MILESTONE
+        value: "1000"
       - key: SIGN_API_KEY
         value: ""
+
+  - type: cron
+    name: jalurtarot-tiktok-controller
+    runtime: node
+    plan: starter
+    region: singapore
+    rootDir: tiktok-controller
+    buildCommand: npm install
+    startCommand: npm start
+    schedule: "*/1 * * * *"
+    autoDeploy: true
+    envVars:
+      - key: TIKTOK_USERNAME
+        sync: false
+      - key: RENDER_API_KEY
+        sync: false
+      - key: LISTENER_SERVICE_NAME
+        value: "jalurtarot-tiktok-listener"
+      - key: CHECK_TIMEOUT_MS
+        value: "20000"
