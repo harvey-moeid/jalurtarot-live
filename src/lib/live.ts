@@ -3,18 +3,24 @@
  *
  * 100% lokal, tanpa AI/LLM. Kartu ditarik dengan Fisher-Yates (draw.ts),
  * maknanya diambil dari data statis di repo:
- *   - lib/cards.ts             → nama, gambar, keyword upright/reversed
- *   - lib/liveAspectMeanings.ts → makna 3 aspek (Hubungan/Karir/Nasib)
+ *   - lib/cards.ts             — nama, gambar, keyword upright/reversed
+ *   - lib/liveAspectMeanings.ts — makna 3 aspek (Hubungan/Karir/Nasib)
  *     yang diambil langsung dari arti-tarot-78-rider-waite.md yang di-upload.
  *
  * Alur:
  *  1. Bot pendengar TikTok Live (Node.js, berjalan terpisah di Termux/HP)
- *     mendeteksi gift target → panggil POST /api/live/trigger dengan header
+ *     mendeteksi gift target — panggil POST /api/live/trigger dengan header
  *     rahasia (X-Live-Secret).
  *  2. Worker menarik kartu, menyusun teks ramalan singkat, menyimpannya
  *     di KV sebagai "draw" terbaru.
  *  3. Halaman overlay (/live) di-buka sebagai Browser Source OBS,
  *     polling GET /api/live/state tiap ~2 detik dan menampilkan draw baru.
+ *
+ * Catatan ikon (rev10): summary tidak lagi memakai emoji unicode langsung
+ * (render berbeda-beda antar OS/font, kadang tampil kotak/hitam-putih di OBS).
+ * Sebagai gantinya dipakai token teks polos `::nama-ikon::` yang di-parse
+ * jadi <svg> inline oleh skrip overlay di routes/live.ts (fungsi icon()).
+ * Token yang dipakai: ::spark:: ::heart:: ::briefcase:: ::crystal::
  */
 
 import { drawCardsForSpread } from './draw';
@@ -68,21 +74,25 @@ function buildCardView(dc: DrawnCard): LiveCardView {
   };
 }
 
-/** Susun ringkasan ramalan singkat — cocok untuk teks overlay live, bukan bacaan panjang. */
+/**
+ * Susun ringkasan ramalan singkat — cocok untuk teks overlay live, bukan bacaan panjang.
+ * Ikon ditulis sebagai token `::nama::` (bukan emoji unicode), di-render jadi SVG
+ * inline oleh overlay (lihat fungsi icon() di routes/live.ts, liveOverlayPage()).
+ */
 function buildSummary(cards: LiveCardView[], spreadId: LiveSpreadId, username: string): string {
   const nama = username?.trim() || 'Kamu';
 
   if (spreadId === 'single') {
     const c = cards[0];
     const posisi = c.isReversed ? '(terbalik)' : '';
-    return `✦ Ramalan untuk ${nama}\n\n**${c.nameCn} ${posisi}**\nKata kunci: ${c.keywords.join(', ')}\n\n💞 Hubungan: ${c.aspect.hubungan}\n💼 Karir: ${c.aspect.karir}\n🔮 Nasib: ${c.aspect.nasib}`;
+    return `::spark:: Ramalan untuk ${nama}\n\n**${c.nameCn} ${posisi}**\nKata kunci: ${c.keywords.join(', ')}\n\n::heart:: Hubungan: ${c.aspect.hubungan}\n::briefcase:: Karir: ${c.aspect.karir}\n::crystal:: Nasib: ${c.aspect.nasib}`;
   }
 
   const [past, present, future] = cards;
   const line = (c: LiveCardView, label: string) =>
-    `**${label} — ${c.nameCn}${c.isReversed ? ' (terbalik)' : ''}**\n🔮 ${c.aspect.nasib}`;
+    `**${label} — ${c.nameCn}${c.isReversed ? ' (terbalik)' : ''}**\n::crystal:: ${c.aspect.nasib}`;
 
-  return `✦ Ramalan Masa Lalu · Kini · Masa Depan untuk ${nama}\n\n${line(past, 'Masa Lalu')}\n\n${line(present, 'Saat Ini')}\n\n${line(future, 'Masa Depan')}`;
+  return `::spark:: Ramalan Masa Lalu · Kini · Masa Depan untuk ${nama}\n\n${line(past, 'Masa Lalu')}\n\n${line(present, 'Saat Ini')}\n\n${line(future, 'Masa Depan')}`;
 }
 
 export function generateLiveDraw(
