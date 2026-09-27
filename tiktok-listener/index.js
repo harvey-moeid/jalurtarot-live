@@ -23,7 +23,7 @@
 
 import 'dotenv/config';
 import util from 'node:util';
-import { TikTokLiveConnection, WebcastEvent, IsLiveRouteConfig, RoomIdRouteConfig } from 'tiktok-live-connector';
+import { TikTokLiveConnection, WebcastEvent } from 'tiktok-live-connector';
 
 const {
   TIKTOK_USERNAME,
@@ -89,19 +89,15 @@ const signApiKeyStatus = signApiKey
   ? `terisi (...${signApiKey.slice(-4)})`
   : 'kosong - pakai free tier EulerStream (rawan rate limit/captcha)';
 
-// Kalau SIGN_API_KEY diisi: skip scrape HTML & API TikTok langsung (tahap 1 & 2 di
-// fetchIsLiveComposite/fetchRoomIdComposite bawaan library). Tahap itu cuma lanjut ke
-// Euler Stream (tahap 3, yang pakai SIGN_API_KEY) kalau tahap sebelumnya melempar error -
-// kalau "berhasil" tapi salah baca status (mis. gara-gara IP datacenter kena halaman
-// berbeda dari TikTok, atau bug parsing di scrape lokal), Euler Stream tidak pernah
-// kesentuh sama sekali walau key-nya valid. Paksa lewat Euler saja supaya key ini
-// benar-benar dipakai.
-if (signApiKey) {
-  IsLiveRouteConfig.skipFetchRoomInfoFromHtmlRoute = true;
-  IsLiveRouteConfig.skipFetchRoomInfoFromApiLiveRoute = true;
-  RoomIdRouteConfig.skipFetchRoomInfoFromHtmlRoute = true;
-  RoomIdRouteConfig.skipFetchRoomInfoFromApiLiveRoute = true;
-}
+// CATATAN (2026-09): sempat dipaksa skip scrape HTML & API TikTok supaya request
+// SELALU lewat Euler Stream ketika SIGN_API_KEY terisi (lihat riwayat commit). Ternyata
+// akun Euler Stream yang dipakai TIDAK punya izin untuk route "fetch Room ID"-nya
+// ("lack of permission ... Euler Stream's fallback method"), jadi forcing itu malah
+// bikin Room ID GAGAL TERUS walau key-nya valid. Dibalikin ke urutan default library:
+// coba scrape HTML -> API TikTok dulu, baru Euler Stream sebagai fallback paling akhir
+// kalau dua cara itu benar-benar error. SIGN_API_KEY tetap dikirim ke bawah supaya
+// tetap dipakai untuk route Euler lain yang izinnya ada (mis. cek status live / signing
+// websocket), cuma tidak lagi dipaksa jadi satu-satunya jalur untuk Room ID.
 
 console.log('Jalur Tarot - Bot TikTok Live');
 console.log(`  Akun target      : @${username}`);
@@ -111,7 +107,7 @@ console.log(`  Nilai gift min   : ${minGiftValue} koin`);
 console.log(`  Ambang 3 kartu   : >= ${threeCardMinValue} koin (di bawah itu -> 1 kartu)`);
 console.log(`  Like milestone   : ${likeMilestone ? `setiap ${likeMilestone} like -> 1 kartu` : 'nonaktif'}`);
 console.log(`  SIGN_API_KEY     : ${signApiKeyStatus}`);
-console.log(`  Deteksi live     : ${signApiKey ? 'Euler Stream saja (skip scrape TikTok langsung)' : 'scrape TikTok -> Euler (fallback bawaan)'}`);
+console.log('  Deteksi live     : scrape TikTok -> Euler Stream (urutan default library)');
 console.log('');
 
 let connection;
