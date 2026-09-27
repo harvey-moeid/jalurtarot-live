@@ -222,13 +222,16 @@ function connect() {
     }
     if (!packet || typeof packet !== 'object') return;
 
-    const type = String(packet.type || '');
-    const data = packet.data || {};
+    const type = String(packet.type || packet.event || packet.name || packet.eventType || packet.messageType || '');
+    const data = packet.data || packet.payload || packet.message || {};
 
     totalMessagesReceived += 1;
     lastMessageAt = Date.now();
     seenPacketTypes.set(type || '(tanpa type)', (seenPacketTypes.get(type || '(tanpa type)') || 0) + 1);
-    if (debugEvents) console.log('EVENT RAW: type=' + (type || '(kosong)'));
+    if (debugEvents || !type) {
+      const keys = Object.keys(packet).join(',');
+      console.log('EVENT RAW: type=' + (type || '(kosong)') + ' keys=[' + keys + '] preview=' + JSON.stringify(packet).slice(0, 400));
+    }
 
     if (type === 'WebcastGiftMessage') handleGift(data);
     else if (type === 'WebcastLikeMessage') handleLike(data);
