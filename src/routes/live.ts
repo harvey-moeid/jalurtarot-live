@@ -78,9 +78,9 @@ export function liveOverlayPage(): string {
 <style>
 :root{--bg:#08070b;--panel:rgba(20,17,24,.82);--gold:#d9b45a;--gold2:#f0d58a;--cream:#f5f0e7;--muted:#a9a19a;--line:rgba(217,180,90,.24);--shadow:0 24px 70px rgba(0,0,0,.42)}
 *{margin:0;padding:0;box-sizing:border-box}
-html,body{width:100%;height:100%;min-height:100%;margin:0;background:transparent}
-body{font-family:"Cormorant Garamond",serif;color:var(--cream);display:flex;align-items:center;justify-content:center;overflow:hidden}
-#stage{width:100%;height:100%;max-width:none;max-height:none;aspect-ratio:9/16;display:none;position:relative;padding:clamp(28px,4vw,64px) clamp(20px,4vw,56px);border:0;border-radius:0;background:linear-gradient(145deg,rgba(15,12,20,.96),rgba(7,6,10,.90));box-shadow:none;backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);overflow:hidden}
+html,body{width:100%;height:100%;min-height:100%;margin:0;background:var(--bg)}
+body{font-family:"Cormorant Garamond",serif;color:var(--cream);display:flex;align-items:center;justify-content:center;overflow:hidden;overscroll-behavior:none}
+#stage{position:fixed;inset:0;width:100vw;height:100vh;height:100dvh;min-width:100vw;min-height:100dvh;max-width:none;max-height:none;aspect-ratio:auto;display:none;padding:max(28px,env(safe-area-inset-top)) max(20px,env(safe-area-inset-right)) max(28px,env(safe-area-inset-bottom)) max(20px,env(safe-area-inset-left));border:0;border-radius:0;background:linear-gradient(145deg,rgba(15,12,20,.98),rgba(7,6,10,.98));box-shadow:none;backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);overflow:auto;overscroll-behavior:none}
 #stage:before{content:"";position:absolute;inset:14px;border:1px solid rgba(217,180,90,.10);border-radius:24px;pointer-events:none}
 #stage.show{display:block;animation:rise .55s cubic-bezier(.2,.8,.2,1)}
 @keyframes rise{from{opacity:0;transform:translateY(18px) scale(.985)}to{opacity:1;transform:none}}
@@ -106,7 +106,7 @@ body{font-family:"Cormorant Garamond",serif;color:var(--cream);display:flex;alig
 .footer{margin-top:14px;text-align:center;color:#746e67;font-family:"Cinzel",serif;font-size:8px;letter-spacing:.18em;text-transform:uppercase}
 @media(max-aspect-ratio:3/4){
 body{align-items:center}
-#stage{width:100vw;height:177.7778vw;max-height:100vh;max-width:56.25vh;padding:28px 14px 20px}
+#stage{width:100vw;height:100vh;height:100dvh;max-height:none;max-width:none;padding:max(24px,env(safe-area-inset-top)) max(14px,env(safe-area-inset-right)) max(20px,env(safe-area-inset-bottom)) max(14px,env(safe-area-inset-left))}
 #stage:before{inset:10px;border-radius:18px}
 .cards-row{gap:7px;margin:24px auto 22px}
 .live-card{width:calc((100% - 14px)/3);max-width:none}
@@ -169,16 +169,17 @@ body{align-items:center}
   }
   async function poll(){
     try{
-      var res=await fetch("/api/live/state",{cache:"no-store"});
+      var res=await fetch("/api/live/state?t="+Date.now(),{cache:"no-store"});
       if(!res.ok)throw new Error("state "+res.status);
       var data=await res.json();
       if(data.draw){if(data.draw.id!==lastId){lastId=data.draw.id;render(data.draw)}}
     }catch(e){}
-    setTimeout(poll,2000);
+    setTimeout(poll,1000);
   }
   if('serviceWorker' in navigator){
     navigator.serviceWorker.register('/sw-live.js').catch(function(){});
   }
+  document.addEventListener("visibilitychange",function(){if(!document.hidden)poll()});
   poll();
 })();
 </script>
