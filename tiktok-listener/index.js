@@ -22,6 +22,7 @@
  */
 
 import 'dotenv/config';
+import util from 'node:util';
 import { TikTokLiveConnection, WebcastEvent, IsLiveRouteConfig, RoomIdRouteConfig } from 'tiktok-live-connector';
 
 const {
@@ -124,44 +125,47 @@ let reconnectAttempt = 0;
 // Index kelipatan like yang sudah pernah memicu draw (reset tiap listener dijalankan ulang).
 let lastLikeMilestoneIndex = 0;
 
-// Menelusuri error connect() (termasuk error gabungan dari composite fetch Euler Stream,
-// sub-error di dalamnya, dan err.cause) supaya CONNECT FAILED menampilkan alasan asli
-// (mis. status HTTP / pesan dari Euler Stream), bukan cuma pesan generik composite-nya.
+// Dump SEMUA properti asli yang menempel di objek error (apa pun namanya) supaya
+// CONNECT FAILED menampilkan alasan asli dari library/Euler Stream, bukan cuma pesan
+// generik dari composite error-nya. Tidak menebak nama properti tertentu - langsung
+// ambil apa adanya lewat Object.getOwnPropertyNames + util.inspect.
 function describeError(err) {
-  const lines = [];
-  const seen = new Set();
-  let current = err;
-  let depth = 0;
+  if (!err || typeof err !== 'object') return '';
 
-  function addResponseDetail(prefix, source) {
-    if (!source?.response) return;
-    const status = source.response.status ?? source.response.statusCode;
-    const rawData = source.response.data ?? source.response.body;
-    if (status !== undefined) lines.push(`${prefix}status: ${status}`);
-    if (rawData !== undefined) {
-      const text = typeof rawData === 'string' ? rawData : JSON.stringify(rawData);
-      lines.push(`${prefix}body: ${text.slice(0, 300)}`);
-    }
-  }
-
-  while (current && !seen.has(current) && depth < 5) {
-    seen.add(current);
-    depth += 1;
-
-    if (Array.isArray(current.errors) && current.errors.length) {
-      current.errors.forEach((sub, i) => {
-        const subType = sub?.constructor?.name || sub?.name || 'Error';
-        lines.push(`  sub[${i}] ${subType}: ${sub?.message || sub}`);
-        addResponseDetail('    ', sub);
-      });
+  try {
+    const seen = new Set();
+    const chain = [];
+    let current = err;
+    let depth = 0;
+    while (current && typeof current === 'object' && !seen.has(current) && depth < 5) {
+      seen.add(current);
+      chain.push(current);
+      current = current.cause;
+      depth += 1;
     }
 
-    addResponseDetail('  ', current);
+    const lines = [];
+    chain.forEach((e, i) => {
+      const type = e?.constructor?.name || e?.name || 'Error';
+      const props = Object.getOwnPropertyNames(e).filter((k) => k !== 'message' && k !== 'stack');
+      const dump = {};
+      for (const key of props) {
+        try {
+          dump[key] = e[key];
+        } catch {
+          dump[key] = '[gagal dibaca]';
+        }
+      }
+      const propText = props.length
+        ? util.inspect(dump, { depth: 6, maxArrayLength: 30, maxStringLength: 1500, breakLength: 120 })
+        : '(tidak ada properti tambahan)';
+      lines.push(`  [${i}] ${type}: ${e?.message || e}\n      properti: ${propText}`);
+    });
 
-    current = current.cause;
+    return lines.length ? `\n${lines.join('\n')}` : '';
+  } catch (inspectErr) {
+    return `\n  (gagal inspect error: ${inspectErr?.message})`;
   }
-
-  return lines.length ? `\n${lines.join('\n')}` : '';
 }
 
 function nextReconnectDelay() {
