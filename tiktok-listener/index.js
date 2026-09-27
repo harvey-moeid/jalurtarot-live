@@ -124,6 +124,46 @@ let reconnectAttempt = 0;
 // Index kelipatan like yang sudah pernah memicu draw (reset tiap listener dijalankan ulang).
 let lastLikeMilestoneIndex = 0;
 
+// Menelusuri error connect() (termasuk error gabungan dari composite fetch Euler Stream,
+// sub-error di dalamnya, dan err.cause) supaya CONNECT FAILED menampilkan alasan asli
+// (mis. status HTTP / pesan dari Euler Stream), bukan cuma pesan generik composite-nya.
+function describeError(err) {
+  const lines = [];
+  const seen = new Set();
+  let current = err;
+  let depth = 0;
+
+  function addResponseDetail(prefix, source) {
+    if (!source?.response) return;
+    const status = source.response.status ?? source.response.statusCode;
+    const rawData = source.response.data ?? source.response.body;
+    if (status !== undefined) lines.push(`${prefix}status: ${status}`);
+    if (rawData !== undefined) {
+      const text = typeof rawData === 'string' ? rawData : JSON.stringify(rawData);
+      lines.push(`${prefix}body: ${text.slice(0, 300)}`);
+    }
+  }
+
+  while (current && !seen.has(current) && depth < 5) {
+    seen.add(current);
+    depth += 1;
+
+    if (Array.isArray(current.errors) && current.errors.length) {
+      current.errors.forEach((sub, i) => {
+        const subType = sub?.constructor?.name || sub?.name || 'Error';
+        lines.push(`  sub[${i}] ${subType}: ${sub?.message || sub}`);
+        addResponseDetail('    ', sub);
+      });
+    }
+
+    addResponseDetail('  ', current);
+
+    current = current.cause;
+  }
+
+  return lines.length ? `\n${lines.join('\n')}` : '';
+}
+
 function nextReconnectDelay() {
   const base = Math.min(
     reconnectMaxMs,
@@ -263,7 +303,7 @@ function attachListeners() {
   });
 
   connection.on(WebcastEvent.ERROR, (err) => {
-    console.error(`CONNECTION ERROR: ${err?.message || err?.info || err || 'unknown error'}`);
+    console.error(`CONNECTION ERROR: ${err?.message || err?.info || err || 'unknown error'}${describeError(err)}`);
     // Jika error terjadi di luar siklus connect/disconnect, health monitor akan memastikan
     // koneksi tidak dibiarkan mati tanpa recovery.
     if (!connected && !reconnecting) scheduleReconnect('Connector melaporkan error.');
@@ -297,7 +337,7 @@ async function connectWithRetry() {
   } catch (err) {
     connected = false;
     const errType = err?.constructor?.name || err?.name || 'Error';
-    console.error(`CONNECT FAILED: @${username} belum terhubung. [${errType}] ${err?.message || err}`);
+    console.error(`CONNECT FAILED: @${username} belum terhubung. [${errType}] ${err?.message || err}${describeError(err)}`);
   } finally {
     reconnecting = false;
     if (!connected && !shuttingDown) scheduleReconnect('Percobaan koneksi gagal.');
