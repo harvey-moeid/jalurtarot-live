@@ -81,6 +81,13 @@ const reconnectMinMs = Math.max(1000, Number.parseInt(RECONNECT_MIN_MS, 10) || 5
 const reconnectMaxMs = Math.max(reconnectMinMs, Number.parseInt(RECONNECT_MAX_MS, 10) || 60000);
 const workerTimeoutMs = Math.max(3000, Number.parseInt(WORKER_TIMEOUT_MS, 10) || 10000);
 
+// Jangan pernah log isi SIGN_API_KEY secara utuh - cukup status + 4 karakter terakhir
+// supaya gampang mastiin env var kebaca tanpa expose key-nya di log.
+const signApiKey = SIGN_API_KEY.trim();
+const signApiKeyStatus = signApiKey
+  ? `terisi (...${signApiKey.slice(-4)})`
+  : 'kosong - pakai free tier EulerStream (rawan rate limit/captcha)';
+
 console.log('Jalur Tarot - Bot TikTok Live');
 console.log(`  Akun target      : @${username}`);
 console.log(`  Worker           : ${workerUrl}`);
@@ -88,6 +95,7 @@ console.log(`  Gift pemicu      : ${targetGiftLower ? `"${targetGiftRaw}" saja` 
 console.log(`  Nilai gift min   : ${minGiftValue} koin`);
 console.log(`  Ambang 3 kartu   : >= ${threeCardMinValue} koin (di bawah itu -> 1 kartu)`);
 console.log(`  Like milestone   : ${likeMilestone ? `setiap ${likeMilestone} like -> 1 kartu` : 'nonaktif'}`);
+console.log(`  SIGN_API_KEY     : ${signApiKeyStatus}`);
 console.log('');
 
 let connection;
@@ -308,7 +316,7 @@ async function shutdown(signal) {
 
 async function main() {
   connection = new TikTokLiveConnection(username, {
-    signApiKey: SIGN_API_KEY.trim() || undefined,
+    signApiKey: signApiKey || undefined,
     // Jangan replay batch awal ketika listener baru connect; hanya proses event live setelah connect.
     processInitialData: false,
   });
