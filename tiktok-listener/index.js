@@ -25,6 +25,7 @@ const likeMilestone = String(env.LIKE_MILESTONE ?? '1000').trim()
 const reconnectMinMs = Math.max(1000, Number.parseInt(env.RECONNECT_MIN_MS || '5000', 10) || 5000);
 const reconnectMaxMs = Math.max(reconnectMinMs, Number.parseInt(env.RECONNECT_MAX_MS || '60000', 10) || 60000);
 const workerTimeoutMs = Math.max(3000, Number.parseInt(env.WORKER_TIMEOUT_MS || '10000', 10) || 10000);
+const debugEvents = ['1', 'true', 'yes'].includes(String(env.DEBUG_EVENTS || '').trim().toLowerCase());
 
 if (!Number.isInteger(minGiftValue) || minGiftValue < 0) throw new Error('MIN_GIFT_VALUE harus angka >= 0.');
 if (!Number.isInteger(threeCardMinValue) || threeCardMinValue < 1) throw new Error('THREE_CARD_MIN_VALUE harus angka >= 1.');
@@ -39,6 +40,7 @@ console.log('  Gift pemicu      : ' + (targetGiftLower ? '"' + targetGift + '" s
 console.log('  Nilai gift min   : ' + minGiftValue + ' koin');
 console.log('  Ambang 3 kartu   : >= ' + threeCardMinValue + ' koin');
 console.log('  Like milestone   : ' + (likeMilestone ? 'setiap ' + likeMilestone + ' like' : 'nonaktif'));
+console.log('  Debug event      : ' + (debugEvents ? 'AKTIF (semua tipe packet di-log)' : 'nonaktif (set DEBUG_EVENTS=1 untuk aktifkan)'));
 console.log('');
 
 let ws = null;
@@ -49,6 +51,24 @@ let connected = false;
 let reconnectAttempt = 0;
 let lastLikeMilestoneIndex = 0;
 const seenEventIds = new Map();
+
+// Debug/diagnostic counters - helps confirm whether ANY traffic is arriving
+// from the room, independent of whether we recognize the packet type.
+let totalMessagesReceived = 0;
+let lastMessageAt = null;
+const seenPacketTypes = new Map();
+let heartbeatTimer = null;
+
+function startHeartbeat() {
+  if (heartbeatTimer) return;
+  heartbeatTimer = setInterval(() => {
+    if (!connected) return;
+    const sinceLast = lastMessageAt ? Math.round((Date.now() - lastMessageAt) / 1000) + 's lalu' : 'belum ada';
+    const typesSummary = [...seenPacketTypes.entries()].map(([t, n]) => t + '=' + n).join(', ') || '(tidak ada)';
+    console.log('HEARTBEAT: total packet diterima=' + totalMessagesReceived + ', packet terakhir=' + sinceLast + ', tipe=' + typesSummary);
+  }, 15000);
+  heartbeatTimer.unref?.();
+}
 
 function nextReconnectDelay() {
   const base = Math.min(reconnectMaxMs, reconnectMinMs * (2 ** Math.min(reconnectAttempt, 5)));
@@ -186,7 +206,11 @@ function connect() {
     reconnecting = false;
     reconnectAttempt = 0;
     lastLikeMilestoneIndex = 0;
+    totalMessagesReceived = 0;
+    lastMessageAt = null;
+    seenPacketTypes.clear();
     console.log('CONNECTED: WebSocket Euler terbuka untuk @' + username + ' (menunggu event live).');
+    startHeartbeat();
   });
 
   ws.on('message', raw => {
@@ -197,8 +221,15 @@ function connect() {
       return;
     }
     if (!packet || typeof packet !== 'object') return;
+
     const type = String(packet.type || '');
     const data = packet.data || {};
+
+    totalMessagesReceived += 1;
+    lastMessageAt = Date.now();
+    seenPacketTypes.set(type || '(tanpa type)', (seenPacketTypes.get(type || '(tanpa type)') || 0) + 1);
+    if (debugEvents) console.log('EVENT RAW: type=' + (type || '(kosong)'));
+
     if (type === 'WebcastGiftMessage') handleGift(data);
     else if (type === 'WebcastLikeMessage') handleLike(data);
     else if (type === 'room.status') {
@@ -228,6 +259,7 @@ function connect() {
       4557: 'gagal mengambil info room',
     };
     console.error('DISCONNECTED: code ' + code + ' - ' + (known[code] || 'koneksi ditutup') + (reason ? ' (' + reason + ')' : ''));
+    console.log('  Ringkasan sesi: total packet diterima=' + totalMessagesReceived + ', tipe=' + ([...seenPacketTypes.entries()].map(([t, n]) => t + '=' + n).join(', ') || '(tidak ada)'));
     if (!shuttingDown) scheduleReconnect('koneksi Euler ditutup.');
   });
 }
@@ -237,6 +269,7 @@ async function shutdown(signal) {
   shuttingDown = true;
   if (reconnectTimer) clearTimeout(reconnectTimer);
   reconnectTimer = null;
+  if (heartbeatTimer) clearInterval(heartbeatTimer);
   console.log('SHUTDOWN: ' + signal + ', menghentikan listener...');
   if (ws && ws.readyState < WebSocket.CLOSING) ws.close(1000, 'Listener shutdown');
   setTimeout(() => process.exit(0), 500).unref();
