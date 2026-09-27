@@ -1,5 +1,4 @@
-# Manual control: listener Render berjalan saat service dinyalakan dari panel admin.
-# Tidak ada Cron Job / controller otomatis.
+# Render Background Worker. Requires a paid always-on plan.
 services:
   - type: worker
     name: jalurtarot-tiktok-listener
@@ -12,10 +11,12 @@ services:
     autoDeploy: true
     envVars:
       - key: TIKTOK_USERNAME
-        value: "jalurtarot"
+        value: jalurtarot
       - key: WORKER_URL
-        sync: false
+        value: https://livejalur.muidsoft.com
       - key: LIVE_SECRET
+        sync: false
+      - key: EULER_API_KEY
         sync: false
       - key: TARGET_GIFT_NAME
         value: "*"
@@ -24,11 +25,9 @@ services:
       - key: THREE_CARD_MIN_VALUE
         value: "5"
       - key: DEFAULT_SPREAD
-        value: "single"
+        value: single
       - key: LIKE_MILESTONE
         value: "1000"
-      - key: SIGN_API_KEY
-        value: ""
       - key: RECONNECT_MIN_MS
         value: "5000"
       - key: RECONNECT_MAX_MS

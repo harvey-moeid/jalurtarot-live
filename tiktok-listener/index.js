@@ -1,392 +1,247 @@
-/**
- * Jalur Tarot - Bot Pendengar TikTok Live
- *
- * Listener berjalan terpisah dari Cloudflare Worker, misalnya di Termux.
- * Tugas:
- *   1. Terhubung ke live TikTok berdasarkan username.
- *   2. Mendengarkan event gift & like.
- *   3. Mengirim trigger yang cocok ke POST /api/live/trigger.
- *
- * Aturan trigger (rev11):
- *   - GIFT: dipicu oleh nilai koin gift (diamondCount x repeatCount), BUKAN
- *     nama gift tertentu saja - kecuali TARGET_GIFT_NAME diisi nama spesifik.
- *     Nilai koin >= THREE_CARD_MIN_VALUE -> tarik 3 kartu, selain itu 1 kartu.
- *   - LIKE: setiap total like di sesi live menembus kelipatan LIKE_MILESTONE
- *     (mis. 1000, 2000, ...), otomatis tarik 1 kartu untuk pengirim like
- *     terakhir pada event tersebut.
- *
- * Jalankan:
- *   npm install
- *   cp .env.example .env
- *   npm start
- */
-
 import 'dotenv/config';
-import util from 'node:util';
-import { TikTokLiveConnection, WebcastEvent } from 'tiktok-live-connector';
+import WebSocket from 'ws';
+import { createWebSocketUrl, ClientCloseCode } from '@eulerstream/euler-websocket-sdk';
 
-const {
-  TIKTOK_USERNAME,
-  WORKER_URL,
-  LIVE_SECRET,
-  TARGET_GIFT_NAME = '',
-  MIN_GIFT_VALUE = '1',
-  THREE_CARD_MIN_VALUE = '5',
-  LIKE_MILESTONE = '1000',
-  DEFAULT_SPREAD = 'single',
-  SIGN_API_KEY = '',
-  RECONNECT_MIN_MS = '5000',
-  RECONNECT_MAX_MS = '60000',
-  WORKER_TIMEOUT_MS = '10000',
-} = process.env;
-
-function requireEnv(name, value) {
-  if (!value?.trim()) {
-    console.error(`ERROR: ${name} belum diisi di file .env - lihat .env.example`);
+const env = process.env;
+const required = ['TIKTOK_USERNAME', 'WORKER_URL', 'LIVE_SECRET'];
+for (const key of required) {
+  if (!String(env[key] || '').trim()) {
+    console.error('ERROR: ' + key + ' belum diisi di environment.');
     process.exit(1);
   }
 }
 
-requireEnv('TIKTOK_USERNAME', TIKTOK_USERNAME);
-requireEnv('WORKER_URL', WORKER_URL);
-requireEnv('LIVE_SECRET', LIVE_SECRET);
+const username = env.TIKTOK_USERNAME.trim().replace(/^@+/, '');
+const workerUrl = env.WORKER_URL.trim().replace(/\/+$/, '');
+const liveSecret = env.LIVE_SECRET.trim();
+const apiKey = String(env.EULER_API_KEY || env.SIGN_API_KEY || '').trim();
+const targetGift = String(env.TARGET_GIFT_NAME || '').trim();
+const targetGiftLower = targetGift && targetGift !== '*' ? targetGift.toLowerCase() : '';
+const minGiftValue = Number.parseInt(env.MIN_GIFT_VALUE || '1', 10);
+const threeCardMinValue = Number.parseInt(env.THREE_CARD_MIN_VALUE || '5', 10);
+const defaultSpread = env.DEFAULT_SPREAD === 'three-card' ? 'three-card' : 'single';
+const likeMilestone = String(env.LIKE_MILESTONE ?? '1000').trim()
+  ? Number.parseInt(env.LIKE_MILESTONE, 10) : 0;
+const reconnectMinMs = Math.max(1000, Number.parseInt(env.RECONNECT_MIN_MS || '5000', 10) || 5000);
+const reconnectMaxMs = Math.max(reconnectMinMs, Number.parseInt(env.RECONNECT_MAX_MS || '60000', 10) || 60000);
+const workerTimeoutMs = Math.max(3000, Number.parseInt(env.WORKER_TIMEOUT_MS || '10000', 10) || 10000);
 
-const username = TIKTOK_USERNAME.trim().replace(/^@+/, '');
-const workerUrl = WORKER_URL.trim().replace(/\/+$/, '');
+if (!Number.isInteger(minGiftValue) || minGiftValue < 0) throw new Error('MIN_GIFT_VALUE harus angka >= 0.');
+if (!Number.isInteger(threeCardMinValue) || threeCardMinValue < 1) throw new Error('THREE_CARD_MIN_VALUE harus angka >= 1.');
+if (likeMilestone && (!Number.isInteger(likeMilestone) || likeMilestone < 1)) throw new Error('LIKE_MILESTONE harus angka >= 1 atau kosong.');
 
-// Kosong atau "*" berarti: semua nama gift diterima (dibedakan lewat nilai koin, bukan nama).
-const targetGiftRaw = TARGET_GIFT_NAME.trim();
-const targetGiftLower = targetGiftRaw && targetGiftRaw !== '*' ? targetGiftRaw.toLowerCase() : null;
-
-const minGiftValue = Number.parseInt(MIN_GIFT_VALUE, 10);
-const threeCardMinValue = Number.parseInt(THREE_CARD_MIN_VALUE, 10);
-const likeMilestone = LIKE_MILESTONE.trim() ? Number.parseInt(LIKE_MILESTONE, 10) : 0;
-
-if (!Number.isInteger(minGiftValue) || minGiftValue < 0) {
-  console.error('ERROR: MIN_GIFT_VALUE harus berupa angka >= 0.');
-  process.exit(1);
-}
-
-if (!Number.isInteger(threeCardMinValue) || threeCardMinValue < 1) {
-  console.error('ERROR: THREE_CARD_MIN_VALUE harus berupa angka >= 1.');
-  process.exit(1);
-}
-
-if (LIKE_MILESTONE.trim() && (!Number.isInteger(likeMilestone) || likeMilestone < 1)) {
-  console.error('ERROR: LIKE_MILESTONE harus berupa angka >= 1 atau dikosongkan.');
-  process.exit(1);
-}
-
-const defaultSpread = DEFAULT_SPREAD === 'three-card' ? 'three-card' : 'single';
-const reconnectMinMs = Math.max(1000, Number.parseInt(RECONNECT_MIN_MS, 10) || 5000);
-const reconnectMaxMs = Math.max(reconnectMinMs, Number.parseInt(RECONNECT_MAX_MS, 10) || 60000);
-const workerTimeoutMs = Math.max(3000, Number.parseInt(WORKER_TIMEOUT_MS, 10) || 10000);
-
-// Jangan pernah log isi SIGN_API_KEY secara utuh - cukup status + 4 karakter terakhir
-// supaya gampang mastiin env var kebaca tanpa expose key-nya di log.
-const signApiKey = SIGN_API_KEY.trim();
-const signApiKeyStatus = signApiKey
-  ? `terisi (...${signApiKey.slice(-4)})`
-  : 'kosong - pakai free tier EulerStream (rawan rate limit/captcha)';
-
-// CATATAN (2026-09): sempat dipaksa skip scrape HTML & API TikTok supaya request
-// SELALU lewat Euler Stream ketika SIGN_API_KEY terisi (lihat riwayat commit). Ternyata
-// akun Euler Stream yang dipakai TIDAK punya izin untuk route "fetch Room ID"-nya
-// ("lack of permission ... Euler Stream's fallback method"), jadi forcing itu malah
-// bikin Room ID GAGAL TERUS walau key-nya valid. Dibalikin ke urutan default library:
-// coba scrape HTML -> API TikTok dulu, baru Euler Stream sebagai fallback paling akhir
-// kalau dua cara itu benar-benar error. SIGN_API_KEY tetap dikirim ke bawah supaya
-// tetap dipakai untuk route Euler lain yang izinnya ada (mis. cek status live / signing
-// websocket), cuma tidak lagi dipaksa jadi satu-satunya jalur untuk Room ID.
-
-console.log('Jalur Tarot - Bot TikTok Live');
-console.log(`  Akun target      : @${username}`);
-console.log(`  Worker           : ${workerUrl}`);
-console.log(`  Gift pemicu      : ${targetGiftLower ? `"${targetGiftRaw}" saja` : 'SEMUA gift (dibedakan lewat nilai koin)'}`);
-console.log(`  Nilai gift min   : ${minGiftValue} koin`);
-console.log(`  Ambang 3 kartu   : >= ${threeCardMinValue} koin (di bawah itu -> 1 kartu)`);
-console.log(`  Like milestone   : ${likeMilestone ? `setiap ${likeMilestone} like -> 1 kartu` : 'nonaktif'}`);
-console.log(`  SIGN_API_KEY     : ${signApiKeyStatus}`);
-console.log('  Deteksi live     : scrape TikTok -> Euler Stream (urutan default library)');
+console.log('Jalur Tarot - Euler WebSocket Listener');
+console.log('  Akun target      : @' + username);
+console.log('  Worker           : ' + workerUrl);
+console.log('  Provider         : Euler Stream Managed WebSocket');
+console.log('  Euler API key    : ' + (apiKey ? 'terisi (tersamarkan)' : 'kosong'));
+console.log('  Gift pemicu      : ' + (targetGiftLower ? '"' + targetGift + '" saja' : 'SEMUA gift'));
+console.log('  Nilai gift min   : ' + minGiftValue + ' koin');
+console.log('  Ambang 3 kartu   : >= ' + threeCardMinValue + ' koin');
+console.log('  Like milestone   : ' + (likeMilestone ? 'setiap ' + likeMilestone + ' like' : 'nonaktif'));
 console.log('');
 
-let connection;
+let ws = null;
 let reconnectTimer = null;
-let healthTimer = null;
 let reconnecting = false;
 let shuttingDown = false;
 let connected = false;
 let reconnectAttempt = 0;
-
-// Index kelipatan like yang sudah pernah memicu draw (reset tiap listener dijalankan ulang).
 let lastLikeMilestoneIndex = 0;
-
-// Dump SEMUA properti asli yang menempel di objek error (apa pun namanya) supaya
-// CONNECT FAILED menampilkan alasan asli dari library/Euler Stream, bukan cuma pesan
-// generik dari composite error-nya. Tidak menebak nama properti tertentu - langsung
-// ambil apa adanya lewat Object.getOwnPropertyNames + util.inspect.
-function describeError(err) {
-  if (!err || typeof err !== 'object') return '';
-
-  try {
-    const seen = new Set();
-    const chain = [];
-    let current = err;
-    let depth = 0;
-    while (current && typeof current === 'object' && !seen.has(current) && depth < 5) {
-      seen.add(current);
-      chain.push(current);
-      current = current.cause;
-      depth += 1;
-    }
-
-    const lines = [];
-    chain.forEach((e, i) => {
-      const type = e?.constructor?.name || e?.name || 'Error';
-      const props = Object.getOwnPropertyNames(e).filter((k) => k !== 'message' && k !== 'stack');
-      const dump = {};
-      for (const key of props) {
-        try {
-          dump[key] = e[key];
-        } catch {
-          dump[key] = '[gagal dibaca]';
-        }
-      }
-      const propText = props.length
-        ? util.inspect(dump, { depth: 6, maxArrayLength: 30, maxStringLength: 1500, breakLength: 120 })
-        : '(tidak ada properti tambahan)';
-      lines.push(`  [${i}] ${type}: ${e?.message || e}\n      properti: ${propText}`);
-    });
-
-    return lines.length ? `\n${lines.join('\n')}` : '';
-  } catch (inspectErr) {
-    return `\n  (gagal inspect error: ${inspectErr?.message})`;
-  }
-}
+const seenEventIds = new Map();
 
 function nextReconnectDelay() {
-  const base = Math.min(
-    reconnectMaxMs,
-    reconnectMinMs * (2 ** Math.min(reconnectAttempt, 5)),
-  );
+  const base = Math.min(reconnectMaxMs, reconnectMinMs * (2 ** Math.min(reconnectAttempt, 5)));
   reconnectAttempt += 1;
-  const jitter = Math.round(base * (0.8 + Math.random() * 0.4));
-  return Math.min(reconnectMaxMs, Math.max(reconnectMinMs, jitter));
+  return Math.min(reconnectMaxMs, Math.max(reconnectMinMs, Math.round(base * (0.8 + Math.random() * 0.4))));
 }
 
-function scheduleReconnect(reason, delayMs = null) {
+function scheduleReconnect(reason, delay) {
   if (shuttingDown || reconnectTimer || reconnecting || connected) return;
-
-  const delay = delayMs ?? nextReconnectDelay();
-  console.log(`RECONNECT: ${reason} Mencoba lagi dalam ${Math.ceil(delay / 1000)} detik...`);
+  const wait = delay ?? nextReconnectDelay();
+  console.log('RECONNECT: ' + reason + ' Mencoba lagi dalam ' + Math.ceil(wait / 1000) + ' detik...');
   reconnectTimer = setTimeout(() => {
     reconnectTimer = null;
-    void connectWithRetry();
-  }, delay);
+    connect();
+  }, wait);
 }
 
-function pickSpreadByValue(coinValue) {
-  return coinValue >= threeCardMinValue ? 'three-card' : defaultSpread;
+function rememberEvent(id) {
+  if (!id) return false;
+  const key = String(id);
+  if (seenEventIds.has(key)) return true;
+  seenEventIds.set(key, Date.now());
+  if (seenEventIds.size > 1000) {
+    const oldest = seenEventIds.keys().next().value;
+    seenEventIds.delete(oldest);
+  }
+  return false;
 }
 
-async function triggerDraw({ sender, giftName, giftCount, spreadId }) {
+function userName(msg) {
+  return String(msg?.user?.uniqueId || msg?.user?.displayId || msg?.uniqueId || msg?.nickname || 'Penonton').trim() || 'Penonton';
+}
+
+function giftName(msg) {
+  return String(msg?.giftName || msg?.gift?.name || msg?.giftDetails?.giftName || msg?.gift?.giftName || 'Gift').trim();
+}
+
+function giftCoins(msg) {
+  const direct = [msg?.diamondCount, msg?.gift?.diamondCount, msg?.giftDetails?.diamondCount,
+    msg?.gift?.diamond_count, msg?.giftDetails?.diamond_count];
+  for (const value of direct) {
+    const n = Number(value);
+    if (Number.isFinite(n) && n >= 0) return n;
+  }
+  return 0;
+}
+
+function giftRepeat(msg) {
+  const n = Number(msg?.giftCount ?? msg?.repeatCount ?? msg?.repeat_count ?? 1);
+  return Number.isFinite(n) && n > 0 ? Math.floor(n) : 1;
+}
+
+async function triggerDraw({ sender, name, count, spread }) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), workerTimeoutMs);
-
   try {
-    const res = await fetch(`${workerUrl}/api/live/trigger`, {
+    const response = await fetch(workerUrl + '/api/live/trigger', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Live-Secret': LIVE_SECRET.trim(),
-      },
-      body: JSON.stringify({
-        username: sender,
-        giftName: giftName || 'Gift',
-        giftCount,
-        spreadId,
-      }),
+      headers: { 'Content-Type': 'application/json', 'X-Live-Secret': liveSecret },
+      body: JSON.stringify({ username: sender, giftName: name || 'Gift', giftCount: count, spreadId: spread }),
       signal: controller.signal,
     });
-
-    const responseText = await res.text().catch(() => '');
-
-    if (!res.ok) {
-      console.error(`WORKER ERROR: trigger ditolak (${res.status})${responseText ? ` - ${responseText.slice(0, 300)}` : ''}`);
+    const bodyText = await response.text().catch(() => '');
+    if (!response.ok) {
+      console.error('WORKER ERROR: HTTP ' + response.status + (bodyText ? ' - ' + bodyText.slice(0, 250) : ''));
       return false;
     }
-
-    let data = null;
-    try {
-      data = responseText ? JSON.parse(responseText) : null;
-    } catch {
-      console.error('WORKER ERROR: respons bukan JSON yang valid.');
-      return false;
-    }
-
-    const cards = data?.draw?.cards?.map((card) => card.nameCn).filter(Boolean).join(', ') || '-';
-    console.log(`DRAW OK: ${sender} -> ${cards}`);
+    let result;
+    try { result = bodyText ? JSON.parse(bodyText) : null; }
+    catch { console.error('WORKER ERROR: respons bukan JSON valid.'); return false; }
+    const cards = result?.draw?.cards?.map(card => card.nameCn).filter(Boolean).join(', ') || '-';
+    console.log('DRAW OK: ' + sender + ' -> ' + cards);
     return true;
-  } catch (err) {
-    if (err?.name === 'AbortError') {
-      console.error(`WORKER ERROR: request timeout setelah ${workerTimeoutMs} ms.`);
-    } else {
-      console.error(`WORKER ERROR: gagal menghubungi Worker - ${err?.message || err}`);
-    }
+  } catch (error) {
+    console.error('WORKER ERROR: ' + (error?.name === 'AbortError' ? 'timeout setelah ' + workerTimeoutMs + ' ms' : (error?.message || error)));
     return false;
   } finally {
     clearTimeout(timeout);
   }
 }
 
-function attachListeners() {
-  connection.on(WebcastEvent.GIFT, (data) => {
-    // Gift streakable dikirim berkali-kali dalam satu combo.
-    // Tunggu repeatEnd agar satu combo tidak memicu banyak draw.
-    const giftDetails = data.giftDetails || {};
-    const giftType = Number(giftDetails.giftType ?? data.giftType) || 0;
-    if (giftType === 1 && !data.repeatEnd) return;
-
-    const giftName = String(giftDetails.giftName ?? data.giftName ?? '').trim();
-    const repeatCount = Math.max(1, Number(data.repeatCount) || 1);
-    const diamondCount = Math.max(0, Number(giftDetails.diamondCount ?? data.diamondCount) || 0);
-    const coinValue = diamondCount * repeatCount;
-    const sender = String(data.user?.uniqueId || data.uniqueId || 'Penonton').trim() || 'Penonton';
-
-    if (targetGiftLower && giftName.toLowerCase() !== targetGiftLower) return;
-    if (coinValue < minGiftValue) return;
-
-    console.log(`GIFT: ${sender} mengirim ${giftName || 'gift'} x${repeatCount} (${coinValue} koin)`);
-    void triggerDraw({
-      sender,
-      giftName,
-      giftCount: repeatCount,
-      spreadId: pickSpreadByValue(coinValue),
-    });
-  });
-
-  connection.on(WebcastEvent.LIKE, (data) => {
-    if (!likeMilestone) return;
-
-    const total = Number(data.totalLikeCount) || 0;
-    const milestoneIndex = Math.floor(total / likeMilestone);
-    if (milestoneIndex <= lastLikeMilestoneIndex) return;
-
-    lastLikeMilestoneIndex = milestoneIndex;
-    const sender = String(data.user?.uniqueId || data.uniqueId || 'Penonton').trim() || 'Penonton';
-    const milestoneValue = milestoneIndex * likeMilestone;
-
-    console.log(`LIKE MILESTONE: total ${total} like (>= ${milestoneValue}), dipicu oleh ${sender}`);
-    void triggerDraw({
-      sender,
-      giftName: `${likeMilestone} Like`,
-      giftCount: milestoneValue,
-      spreadId: 'single',
-    });
-  });
-
-  connection.on(WebcastEvent.CONNECTED, (state) => {
-    connected = true;
-    reconnectAttempt = 0;
-    lastLikeMilestoneIndex = 0;
-    console.log(`CONNECTED: @${username} (roomId: ${state.roomId})`);
-  });
-
-  connection.on(WebcastEvent.DISCONNECTED, ({ code, reason } = {}) => {
-    if (shuttingDown) return;
-
-    connected = false;
-    console.log(
-      `DISCONNECTED: koneksi TikTok terputus${code !== undefined ? ` (code ${code})` : ''}${reason ? ` - ${reason}` : ''}.`,
-    );
-    scheduleReconnect('Koneksi terputus.');
-  });
-
-  connection.on(WebcastEvent.ERROR, (err) => {
-    console.error(`CONNECTION ERROR: ${err?.message || err?.info || err || 'unknown error'}${describeError(err)}`);
-    // Jika error terjadi di luar siklus connect/disconnect, health monitor akan memastikan
-    // koneksi tidak dibiarkan mati tanpa recovery.
-    if (!connected && !reconnecting) scheduleReconnect('Connector melaporkan error.');
-  });
+function handleGift(msg) {
+  if (rememberEvent(msg?.msgId || msg?.messageId || msg?.common?.msgId)) return;
+  const name = giftName(msg);
+  const count = giftRepeat(msg);
+  const coins = giftCoins(msg) * count;
+  if (targetGiftLower && name.toLowerCase() !== targetGiftLower) return;
+  if (coins < minGiftValue) return;
+  console.log('GIFT: ' + userName(msg) + ' mengirim ' + name + ' x' + count + ' (' + coins + ' koin)');
+  void triggerDraw({ sender: userName(msg), name, count, spread: coins >= threeCardMinValue ? 'three-card' : defaultSpread });
 }
 
-function startHealthMonitor() {
-  healthTimer = setInterval(() => {
-    if (shuttingDown || !connection) return;
-
-    const isConnected = Boolean(connection.isConnected);
-    const isConnecting = Boolean(connection.isConnecting);
-    connected = isConnected;
-
-    if (!isConnected && !isConnecting && !reconnecting) {
-      scheduleReconnect('Health check mendeteksi koneksi tidak aktif.');
-    }
-  }, 30000);
+function handleLike(msg) {
+  if (!likeMilestone) return;
+  const total = Number(msg?.totalLikeCount ?? msg?.total_like_count ?? msg?.totalLike ?? 0);
+  if (!Number.isFinite(total) || total <= 0) return;
+  const index = Math.floor(total / likeMilestone);
+  if (index <= lastLikeMilestoneIndex) return;
+  lastLikeMilestoneIndex = index;
+  const at = index * likeMilestone;
+  const sender = userName(msg);
+  console.log('LIKE MILESTONE: total ' + total + ' like (>= ' + at + '), dari ' + sender);
+  void triggerDraw({ sender, name: likeMilestone + ' Like', count: at, spread: 'single' });
 }
 
-async function connectWithRetry() {
-  if (shuttingDown || reconnecting || connection?.isConnected) return;
-
+function connect() {
+  if (shuttingDown || reconnecting || (ws && (ws.readyState === WebSocket.CONNECTING || ws.readyState === WebSocket.OPEN))) return;
   reconnecting = true;
-  console.log(`CONNECT: mencoba @${username}...`);
+  console.log('CONNECT: meminta stream @' + username + ' melalui Euler...');
+  let url;
+  try {
+    url = createWebSocketUrl({
+      uniqueId: username,
+      apiKey: apiKey || undefined,
+      features: { bundleEvents: true, syntheticPresence: false, schemaVersion: 'v2' },
+    });
+  } catch (error) {
+    reconnecting = false;
+    console.error('CONFIG ERROR: gagal membuat URL Euler: ' + (error?.message || error));
+    scheduleReconnect('konfigurasi URL gagal.');
+    return;
+  }
 
   try {
-    const state = await connection.connect();
-    connected = Boolean(state?.isConnected ?? connection.isConnected);
-    if (connected) reconnectAttempt = 0;
-  } catch (err) {
-    connected = false;
-    const errType = err?.constructor?.name || err?.name || 'Error';
-    console.error(`CONNECT FAILED: @${username} belum terhubung. [${errType}] ${err?.message || err}${describeError(err)}`);
-  } finally {
+    ws = new WebSocket(url);
+  } catch (error) {
     reconnecting = false;
-    if (!connected && !shuttingDown) scheduleReconnect('Percobaan koneksi gagal.');
+    console.error('CONNECT ERROR: gagal membuat WebSocket: ' + (error?.message || error));
+    scheduleReconnect('inisialisasi WebSocket gagal.');
+    return;
   }
+
+  ws.on('open', () => {
+    connected = true;
+    reconnecting = false;
+    reconnectAttempt = 0;
+    lastLikeMilestoneIndex = 0;
+    console.log('CONNECTED: WebSocket Euler terbuka untuk @' + username + ' (menunggu event live).');
+  });
+
+  ws.on('message', raw => {
+    let packet;
+    try { packet = JSON.parse(raw.toString()); }
+    catch (error) {
+      console.error('MESSAGE ERROR: frame Euler bukan JSON: ' + (error?.message || error));
+      return;
+    }
+    if (!packet || typeof packet !== 'object') return;
+    const type = String(packet.type || '');
+    const data = packet.data || {};
+    if (type === 'WebcastGiftMessage') handleGift(data);
+    else if (type === 'WebcastLikeMessage') handleLike(data);
+    else if (type === 'room.status') {
+      if (data.state === 'connected') console.log('ROOM CONNECTED: roomId ' + (data.roomId || 'tidak disediakan'));
+      else if (data.state === 'error') console.error('ROOM ERROR: ' + (data.message || 'status error dari Euler'));
+      else console.log('ROOM STATUS: ' + (data.state || 'unknown'));
+    } else if (type === 'tiktok.error') {
+      console.error('EULER ERROR: ' + (data.message || JSON.stringify(data).slice(0, 300)));
+    }
+  });
+
+  ws.on('error', error => {
+    console.error('WEBSOCKET ERROR: ' + (error?.message || error));
+  });
+
+  ws.on('close', (code, reasonBuffer) => {
+    const reason = reasonBuffer?.toString() || '';
+    connected = false;
+    reconnecting = false;
+    ws = null;
+    const known = {
+      4401: 'autentikasi Euler tidak valid',
+      4403: 'akun/key tidak memiliki izin',
+      4404: 'akun TikTok sedang offline atau tidak ditemukan',
+      4429: 'batas koneksi tercapai',
+      4556: 'gagal mengambil webcast',
+      4557: 'gagal mengambil info room',
+    };
+    console.error('DISCONNECTED: code ' + code + ' - ' + (known[code] || 'koneksi ditutup') + (reason ? ' (' + reason + ')' : ''));
+    if (!shuttingDown) scheduleReconnect('koneksi Euler ditutup.');
+  });
 }
 
 async function shutdown(signal) {
   if (shuttingDown) return;
-
   shuttingDown = true;
-  if (reconnectTimer) {
-    clearTimeout(reconnectTimer);
-    reconnectTimer = null;
-  }
-  if (healthTimer) {
-    clearInterval(healthTimer);
-    healthTimer = null;
-  }
-
-  console.log(`SHUTDOWN: menerima ${signal}, menghentikan listener...`);
-
-  try {
-    if (connection?.disconnect) {
-      await connection.disconnect();
-    }
-  } catch (err) {
-    console.error(`SHUTDOWN ERROR: ${err?.message || err}`);
-  } finally {
-    process.exit(0);
-  }
+  if (reconnectTimer) clearTimeout(reconnectTimer);
+  reconnectTimer = null;
+  console.log('SHUTDOWN: ' + signal + ', menghentikan listener...');
+  if (ws && ws.readyState < WebSocket.CLOSING) ws.close(1000, 'Listener shutdown');
+  setTimeout(() => process.exit(0), 500).unref();
 }
 
-async function main() {
-  connection = new TikTokLiveConnection(username, {
-    signApiKey: signApiKey || undefined,
-    // Jangan replay batch awal ketika listener baru connect; hanya proses event live setelah connect.
-    processInitialData: false,
-  });
-
-  attachListeners();
-
-  process.once('SIGINT', () => void shutdown('SIGINT'));
-  process.once('SIGTERM', () => void shutdown('SIGTERM'));
-
-  startHealthMonitor();
-  await connectWithRetry();
-}
-
-main().catch((err) => {
-  console.error(`FATAL: ${err?.message || err}`);
-  process.exit(1);
-});
+process.once('SIGINT', () => void shutdown('SIGINT'));
+process.once('SIGTERM', () => void shutdown('SIGTERM'));
+connect();

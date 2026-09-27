@@ -1,82 +1,34 @@
-# Bot TikTok Live - Ramalan Live Jalur Tarot
+# Jalur Tarot TikTok LIVE Listener
 
-Listener berjalan sebagai Render Background Worker. Kontrol ON/OFF dilakukan manual dari panel admin; **tidak ada Cron Controller**.
+Node.js listener using the Euler Stream managed WebSocket SDK instead of the unofficial connector's TikTok room-ID scraping/signing fallback chain.
 
-## Alur
-
-```
-TikTok LIVE
-   |
-   v
-Render Background Worker: jalurtarot-tiktok-listener
-   |
-   +-- GIFT / LIKE
-   |
-   v
-POST /api/live/trigger
-   |
-   v
-Cloudflare Worker -> KV -> Overlay OBS
-```
-
-## Stabilitas listener
-
-Listener menggunakan:
-
-- `tiktok-live-connector 2.5.0`
+## Setup
 - Node.js 20+
-- reconnect exponential backoff + jitter (default 5-60 detik)
-- recovery saat `DISCONNECTED`
-- recovery tambahan melalui health check 30 detik
-- `processInitialData: false` agar batch event lama saat awal koneksi tidak diproses sebagai trigger baru
-- gift streak hanya diproses saat `repeatEnd=true`
-- metadata gift membaca format connector 2.x melalui `giftDetails`, dengan fallback field lama
-- request Worker memiliki timeout
-- graceful shutdown untuk SIGINT/SIGTERM
+- Euler Stream API key with WebSocket access
+- Cloudflare Worker URL and matching LIVE_SECRET
 
-> Catatan: TikTok Live Connector adalah library unofficial/reverse-engineered. Stabilitas tetap bergantung pada perubahan protokol TikTok dan layanan signing. Untuk kebutuhan production yang sangat kritis, dokumentasi library menyarankan WebSocket API Euler Stream.
+Install in this directory:
+```sh
+npm install
+cp .env.example .env
+npm start
+``
 
-## Environment listener
+Set `TIKTOK_USERNAME`, `WORKER_URL`, `LIVE_SECRET`, and `EULER_API_KEY`. On Render, set these in the service Environment tab; do not commit secrets. `SIGN_API_KEY` is accepted as a backward-compatible alias, but use `EULER_API_KEY` for clarity.
 
-| Key | Wajib | Keterangan |
-|---|---|---|
-| `TIKTOK_USERNAME` | Ya | Username TikTok tanpa @ |
-| `WORKER_URL` | Ya | URL Cloudflare Worker |
-| `LIVE_SECRET` | Ya | Sama dengan secret Worker |
-| `TARGET_GIFT_NAME` | Tidak | Nama gift tertentu; kosong/`*` = semua |
-| `MIN_GIFT_VALUE` | Tidak | Minimum nilai koin |
-| `THREE_CARD_MIN_VALUE` | Tidak | Ambang 3 kartu |
-| `DEFAULT_SPREAD` | Tidak | `single` / `three-card` |
-| `LIKE_MILESTONE` | Tidak | Milestone like |
-| `SIGN_API_KEY` | Tidak | Euler Stream sign API key |
-| `RECONNECT_MIN_MS` | Tidak | Default 5000 |
-| `RECONNECT_MAX_MS` | Tidak | Default 60000 |
-| `WORKER_TIMEOUT_MS` | Tidak | Default 10000 |
+## Event handling
+- Receives Euler packets named `WebcastGiftMessage` and `WebcastLikeMessage`.
+- Gift coins are estimated from message diamond-count fields times gift count; validate against a real gift event before public live use because event schemas can vary.
+- Sends accepted events to `POST /api/live/trigger`.
+- Reconnects with exponential backoff and logs meaningful Euler close codes. The provider can return NOT_LIVE (4404) when the target is not live.
+- Run only one listener instance for this TikTok account to avoid duplicate draws.
 
 ## Render
+Create a Background Worker with root directory `tiktok-listener`, build command `npm install`, and start command `npm start`. The included `render.yaml` is a Blueprint definition. A continuously running Background Worker uses a paid always-on plan; verify current pricing in Render dashboard.
 
-Service harus berupa **Background Worker**, bukan Web Service.
-
-Konfigurasi Blueprint sudah ada di `render.yaml`:
-
-- Name: `jalurtarot-tiktok-listener`
-- Runtime: Node
-- Region: Singapore
-- Plan: Starter
-- Root Directory: `tiktok-listener`
-- Build: `npm install`
-- Start: `npm start`
-- Auto Deploy: aktif
-
-**Jangan menjalankan listener Render dan Termux bersamaan** untuk akun TikTok yang sama karena keduanya dapat memproses event yang sama.
-
-## Checklist sebelum live
-
-- [ ] TikTok akun target sedang LIVE.
-- [ ] Listener Render berstatus running.
-- [ ] Log menunjukkan `CONNECTED`.
-- [ ] `WORKER_URL` benar.
-- [ ] `LIVE_SECRET` benar.
-- [ ] Gift/like test berhasil.
-- [ ] Overlay `/live` sudah terbuka di OBS.
-- [ ] Tidak ada listener kedua yang aktif.
+## Troubleshooting
+- `4401`: check the Euler API key.
+- `4403`: key/account permission issue; check Euler dashboard/support.
+- `4404`: target is offline or username cannot be resolved; confirm the account is LIVE and username is correct.
+- `WORKER ERROR 401`: LIVE_SECRET differs from the Cloudflare Worker secret.
+- `CONNECTED` but no gifts: check real incoming event logs / account is live, then validate gift message fields.
