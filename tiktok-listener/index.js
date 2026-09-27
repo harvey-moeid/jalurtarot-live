@@ -22,7 +22,7 @@
  */
 
 import 'dotenv/config';
-import { TikTokLiveConnection, WebcastEvent } from 'tiktok-live-connector';
+import { TikTokLiveConnection, WebcastEvent, IsLiveRouteConfig, RoomIdRouteConfig } from 'tiktok-live-connector';
 
 const {
   TIKTOK_USERNAME,
@@ -88,6 +88,20 @@ const signApiKeyStatus = signApiKey
   ? `terisi (...${signApiKey.slice(-4)})`
   : 'kosong - pakai free tier EulerStream (rawan rate limit/captcha)';
 
+// Kalau SIGN_API_KEY diisi: skip scrape HTML & API TikTok langsung (tahap 1 & 2 di
+// fetchIsLiveComposite/fetchRoomIdComposite bawaan library). Tahap itu cuma lanjut ke
+// Euler Stream (tahap 3, yang pakai SIGN_API_KEY) kalau tahap sebelumnya melempar error -
+// kalau "berhasil" tapi salah baca status (mis. gara-gara IP datacenter kena halaman
+// berbeda dari TikTok, atau bug parsing di scrape lokal), Euler Stream tidak pernah
+// kesentuh sama sekali walau key-nya valid. Paksa lewat Euler saja supaya key ini
+// benar-benar dipakai.
+if (signApiKey) {
+  IsLiveRouteConfig.skipFetchRoomInfoFromHtmlRoute = true;
+  IsLiveRouteConfig.skipFetchRoomInfoFromApiLiveRoute = true;
+  RoomIdRouteConfig.skipFetchRoomInfoFromHtmlRoute = true;
+  RoomIdRouteConfig.skipFetchRoomInfoFromApiLiveRoute = true;
+}
+
 console.log('Jalur Tarot - Bot TikTok Live');
 console.log(`  Akun target      : @${username}`);
 console.log(`  Worker           : ${workerUrl}`);
@@ -96,6 +110,7 @@ console.log(`  Nilai gift min   : ${minGiftValue} koin`);
 console.log(`  Ambang 3 kartu   : >= ${threeCardMinValue} koin (di bawah itu -> 1 kartu)`);
 console.log(`  Like milestone   : ${likeMilestone ? `setiap ${likeMilestone} like -> 1 kartu` : 'nonaktif'}`);
 console.log(`  SIGN_API_KEY     : ${signApiKeyStatus}`);
+console.log(`  Deteksi live     : ${signApiKey ? 'Euler Stream saja (skip scrape TikTok langsung)' : 'scrape TikTok -> Euler (fallback bawaan)'}`);
 console.log('');
 
 let connection;
@@ -281,7 +296,8 @@ async function connectWithRetry() {
     if (connected) reconnectAttempt = 0;
   } catch (err) {
     connected = false;
-    console.error(`CONNECT FAILED: @${username} belum terhubung. ${err?.message || err}`);
+    const errType = err?.constructor?.name || err?.name || 'Error';
+    console.error(`CONNECT FAILED: @${username} belum terhubung. [${errType}] ${err?.message || err}`);
   } finally {
     reconnecting = false;
     if (!connected && !shuttingDown) scheduleReconnect('Percobaan koneksi gagal.');
