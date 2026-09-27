@@ -222,25 +222,31 @@ function connect() {
     }
     if (!packet || typeof packet !== 'object') return;
 
-    const type = String(packet.type || packet.event || packet.name || packet.eventType || packet.messageType || '');
-    const data = packet.data || packet.payload || packet.message || {};
+    // Euler bundles multiple events into one WebSocket frame as { messages: [...], timestamp }
+    // when features.bundleEvents is enabled. Each entry in messages[] is its own { type, data } event.
+    const messages = Array.isArray(packet.messages) ? packet.messages : [packet];
 
-    totalMessagesReceived += 1;
-    lastMessageAt = Date.now();
-    seenPacketTypes.set(type || '(tanpa type)', (seenPacketTypes.get(type || '(tanpa type)') || 0) + 1);
-    if (debugEvents || !type) {
-      const keys = Object.keys(packet).join(',');
-      console.log('EVENT RAW: type=' + (type || '(kosong)') + ' keys=[' + keys + '] preview=' + JSON.stringify(packet).slice(0, 400));
-    }
+    for (const msg of messages) {
+      if (!msg || typeof msg !== 'object') continue;
+      const type = String(msg.type || '');
+      const data = msg.data || {};
 
-    if (type === 'WebcastGiftMessage') handleGift(data);
-    else if (type === 'WebcastLikeMessage') handleLike(data);
-    else if (type === 'room.status') {
-      if (data.state === 'connected') console.log('ROOM CONNECTED: roomId ' + (data.roomId || 'tidak disediakan'));
-      else if (data.state === 'error') console.error('ROOM ERROR: ' + (data.message || 'status error dari Euler'));
-      else console.log('ROOM STATUS: ' + (data.state || 'unknown'));
-    } else if (type === 'tiktok.error') {
-      console.error('EULER ERROR: ' + (data.message || JSON.stringify(data).slice(0, 300)));
+      totalMessagesReceived += 1;
+      lastMessageAt = Date.now();
+      seenPacketTypes.set(type || '(tanpa type)', (seenPacketTypes.get(type || '(tanpa type)') || 0) + 1);
+      if (debugEvents || !type) {
+        console.log('EVENT RAW: type=' + (type || '(kosong)') + ' preview=' + JSON.stringify(msg).slice(0, 400));
+      }
+
+      if (type === 'WebcastGiftMessage') handleGift(data);
+      else if (type === 'WebcastLikeMessage') handleLike(data);
+      else if (type === 'room.status') {
+        if (data.state === 'connected') console.log('ROOM CONNECTED: roomId ' + (data.roomId || 'tidak disediakan'));
+        else if (data.state === 'error') console.error('ROOM ERROR: ' + (data.message || 'status error dari Euler'));
+        else console.log('ROOM STATUS: ' + (data.state || 'unknown'));
+      } else if (type === 'tiktok.error') {
+        console.error('EULER ERROR: ' + (data.message || JSON.stringify(data).slice(0, 300)));
+      }
     }
   });
 
