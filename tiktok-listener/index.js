@@ -23,8 +23,10 @@ const targetGiftLower = targetGift && targetGift !== '*' ? targetGift.toLowerCas
 const minGiftValue = Number.parseInt(env.MIN_GIFT_VALUE || '1', 10);
 const threeCardMinValue = Number.parseInt(env.THREE_CARD_MIN_VALUE || '5', 10);
 const defaultSpread = env.DEFAULT_SPREAD === 'three-card' ? 'three-card' : 'single';
-const likeMilestone = String(env.LIKE_MILESTONE ?? '1000').trim()
-  ? Number.parseInt(env.LIKE_MILESTONE, 10) : 0;
+// LIKE_MILESTONE: tidak di-set = default 1000; di-set kosong = nonaktif; angka = setiap N like.
+// Sebelumnya variabel yang tidak di-set menghasilkan NaN sehingga fitur mati diam-diam.
+const likeMilestoneRaw = env.LIKE_MILESTONE === undefined ? '1000' : String(env.LIKE_MILESTONE).trim();
+const likeMilestone = likeMilestoneRaw ? Number.parseInt(likeMilestoneRaw, 10) : 0;
 const reconnectMinMs = Math.max(1000, Number.parseInt(env.RECONNECT_MIN_MS || '5000', 10) || 5000);
 const reconnectMaxMs = Math.max(reconnectMinMs, Number.parseInt(env.RECONNECT_MAX_MS || '60000', 10) || 60000);
 const workerTimeoutMs = Math.max(3000, Number.parseInt(env.WORKER_TIMEOUT_MS || '10000', 10) || 10000);
@@ -32,7 +34,7 @@ const debugEvents = ['1', 'true', 'yes'].includes(String(env.DEBUG_EVENTS || '')
 
 if (!Number.isInteger(minGiftValue) || minGiftValue < 0) throw new Error('MIN_GIFT_VALUE harus angka >= 0.');
 if (!Number.isInteger(threeCardMinValue) || threeCardMinValue < 1) throw new Error('THREE_CARD_MIN_VALUE harus angka >= 1.');
-if (likeMilestone && (!Number.isInteger(likeMilestone) || likeMilestone < 1)) throw new Error('LIKE_MILESTONE harus angka >= 1 atau kosong.');
+if (likeMilestoneRaw && (!Number.isInteger(likeMilestone) || likeMilestone < 1)) throw new Error('LIKE_MILESTONE harus angka >= 1 atau kosong.');
 
 console.log('Jalur Tarot - Euler WebSocket Listener');
 console.log('  Akun target      : @' + username);
