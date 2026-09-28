@@ -3,7 +3,7 @@ import { Hono } from 'hono';
 import { generateLiveDraw, saveLiveDraw, getLiveDraw, type LiveSpreadId } from '../lib/live';
 
 import type { AdminEnv } from '../middleware/adminAuth';
-import { adminAuth, getAdminPassword, isLoginRateLimited, recordFailedLogin, clearLoginFailures, createAdminSession, destroyAdminSession } from '../middleware/adminAuth';
+import { adminAuth, getAdminPassword, isAuthenticated, isLoginRateLimited, recordFailedLogin, clearLoginFailures, createAdminSession, destroyAdminSession, ADMIN_SESSION_TTL_SECONDS } from '../middleware/adminAuth';
 
 const admin = new Hono<{ Bindings: AdminEnv }>();
 admin.use('*', adminAuth as any);
@@ -420,9 +420,8 @@ function adminShell(title: string, content: string, activePage: string = ''): st
 // GET /admin/login
 admin.get('/login', (c) => {
   const error = c.req.query('error');
-  const hint = c.req.query('hint'); // hint=1 jika ADMIN_PASSWORD belum diset
   // Jika sudah login, redirect langsung ke dashboard
-  if (isAuthenticated(c)) {
+  if (await isAuthenticated(c)) {
     return c.redirect('/admin');
   }
   return c.html(`<!DOCTYPE html>
@@ -903,8 +902,6 @@ export async function checkBlacklist(env: AdminEnv, ip: string): Promise<boolean
 
 // GET /admin/live - panel kontrol & panduan setup
 admin.get('/live', async (c) => {
-  const authErr = await requireAuth(c);
-  if (authErr) return authErr;
   const msg = c.req.query('msg');
   const msgType = c.req.query('type') || 'success';
   const secretSet = Boolean((c.env as any).LIVE_SECRET);
@@ -971,8 +968,6 @@ admin.get('/live', async (c) => {
 });
 
 admin.post('/live/render/start', async (c) => {
-  const authErr = await requireAuth(c);
-  if (authErr) return authErr;
   try {
     const service = await getRenderListener(c.env);
     if (service.suspended === 'suspended') await renderApiRequest(c.env, '/services/' + service.id + '/resume', { method: 'POST' });
@@ -983,8 +978,6 @@ admin.post('/live/render/start', async (c) => {
 });
 
 admin.post('/live/render/stop', async (c) => {
-  const authErr = await requireAuth(c);
-  if (authErr) return authErr;
   try {
     const service = await getRenderListener(c.env);
     if (service.suspended !== 'suspended') await renderApiRequest(c.env, '/services/' + service.id + '/suspend', { method: 'POST' });

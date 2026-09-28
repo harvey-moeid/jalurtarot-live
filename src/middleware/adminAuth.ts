@@ -14,7 +14,7 @@ export type AdminEnv = Env & {
   RENDER_LISTENER_SERVICE_NAME?: string;
 };
 
-const ADMIN_SESSION_TTL_SECONDS = 8 * 60 * 60;
+export const ADMIN_SESSION_TTL_SECONDS = 8 * 60 * 60;
 const ADMIN_LOGIN_WINDOW_SECONDS = 15 * 60;
 const ADMIN_LOGIN_MAX_ATTEMPTS = 8;
 
@@ -37,7 +37,7 @@ function getClientIp(c: any): string {
   return (c.req.header('CF-Connecting-IP') || c.req.header('X-Forwarded-For') || 'unknown').split(',')[0].trim().slice(0, 100);
 }
 
-async function isAuthenticated(c: any): Promise<boolean> {
+export async function isAuthenticated(c: any): Promise<boolean> {
   const token = getCookie(c, 'admin_token');
   if (!token) return false;
   try {
