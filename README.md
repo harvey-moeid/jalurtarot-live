@@ -1,10 +1,10 @@
-# JalurTarot Live 🔮
+# JalurTarot Live
 
-Aplikasi baca tarot berbasis web untuk siaran **TikTok Live** — 100% statis, tanpa AI/LLM, tanpa biaya per-ramalan.
+Aplikasi baca tarot berbasis web untuk siaran **TikTok Live** - 100% statis, tanpa AI/LLM, tanpa biaya per-ramalan.
 
-Saat penonton mengirim gift target, bot Node.js memicu Worker → kartu ditarik otomatis → tampil di overlay OBS.
+Saat penonton mengirim gift target, bot Node.js memicu Worker -> kartu ditarik otomatis -> tampil di overlay OBS.
 
-🌐 **Production:** [livejalur.muidsoft.com](https://livejalur.muidsoft.com/)
+**Production:** [livejalur.muidsoft.com](https://livejalur.muidsoft.com/)
 
 ---
 
@@ -25,15 +25,15 @@ Saat penonton mengirim gift target, bot Node.js memicu Worker → kartu ditarik 
 
 ## Fitur
 
-- **Ramalan Live** — overlay OBS yang tampil otomatis saat gift masuk di TikTok Live
+- **Ramalan Live** - overlay OBS yang tampil otomatis saat gift masuk di TikTok Live
 - **78 kartu Rider-Waite** lengkap dengan gambar
 - **3 aspek ramalan** per kartu: Hubungan / Karir / Nasib
 - **Kartu Harian** deterministik (sama untuk semua orang di hari yang sama, hash djb2)
-- **Reading manual** (`/reading`) — 1 kartu atau 3 kartu, dengan tone selector
-- **Tone selector** — spiritual / praktis / puitis
-- **Admin Panel** (`/admin`) — dashboard, kontrol Ramalan Live, banner, IP blacklist, test draw manual
-- **PWA** — bisa diinstall di HP (manifest + icons)
-- **Fisher-Yates shuffle** — pengundian kartu uniform, bukan `Math.random()` naif
+- **Reading manual** (`/reading`) - 1 kartu atau 3 kartu, dengan tone selector
+- **Tone selector** - spiritual / praktis / puitis
+- **Admin Panel** (`/admin`) - dashboard, kontrol Ramalan Live, banner, IP blacklist, test draw manual
+- **PWA** - bisa diinstall di HP (manifest + icons)
+- **Fisher-Yates shuffle** - pengundian kartu uniform, bukan `Math.random()` naif
 - Semua ramalan gratis, tanpa limit, tanpa AI/LLM eksternal
 
 ---
@@ -41,38 +41,39 @@ Saat penonton mengirim gift target, bot Node.js memicu Worker → kartu ditarik 
 ## Struktur
 
 ```
-├── src/
-│   ├── index.ts              ← Entry point & routing
-│   ├── routes/
-│   │   ├── home.ts           ← GET /
-│   │   ├── daily.ts          ← GET /daily
-│   │   ├── reading.ts        ← GET /reading (single & three-card)
-│   │   ├── library.ts        ← GET /library
-│   │   ├── history.ts        ← GET /history
-│   │   ├── support.ts        ← GET /support
-│   │   ├── live.ts           ← GET /live, /api/live/*
-│   │   ├── admin.ts          ← /admin/*
-│   │   ├── api.ts            ← /api/interpret, /api/config, dst
-│   │   └── agent.ts          ← legacy, tidak terdaftar di index.ts
-│   └── lib/
-│       ├── types.ts              ← TypeScript interfaces
-│       ├── cards.ts               ← 78 kartu Rider-Waite-Smith
-│       ├── spreads.ts             ← 6 definisi spread (hanya 2 dipakai di UI)
-│       ├── interpret.ts           ← Static interpretation engine (tone-aware)
-│       ├── enrichedMeanings.ts    ← Makna kartu untuk /reading & /daily
-│       ├── liveAspectMeanings.ts  ← Makna Hubungan/Karir/Nasib untuk Ramalan Live
-│       ├── live.ts                ← generateLiveDraw(), saveLiveDraw(), getLiveDraw()
-│       ├── daily.ts               ← Kartu harian (djb2 hash deterministik)
-│       ├── draw.ts                ← Fisher-Yates shuffle
-│       ├── layout.ts              ← HTML shell + CSS design system
-│       ├── markdown.ts            ← markdownToHtml()
-│       ├── icons.ts               ← SVG icons
-│       └── config.ts              ← Legacy LLM config helper (untuk /admin/health)
-├── tiktok-listener/          ← Bot Node.js (jalan terpisah di Termux/VPS)
-├── public/                   ← Gambar kartu (78 JPG), icons, manifest PWA
-├── .github/workflows/ci.yml  ← Type check + deploy otomatis
-├── wrangler.toml
-└── tsconfig.json
+jalurtarot-live/
+  src/
+    index.ts                   - Entry point & routing
+    routes/
+      home.ts                  - GET /
+      daily.ts                 - GET /daily
+      reading.ts               - GET /reading (single & three-card)
+      library.ts               - GET /library
+      history.ts               - GET /history
+      support.ts               - GET /support
+      live.ts                  - GET /live, /api/live/*
+      admin.ts                 - /admin/*
+      api.ts                   - /api/interpret, /api/config, dst
+      agent.ts                 - legacy, tidak terdaftar di index.ts
+    lib/
+      types.ts                 - TypeScript interfaces
+      cards.ts                 - 78 kartu Rider-Waite-Smith
+      spreads.ts               - 6 definisi spread (hanya 2 dipakai di UI)
+      interpret.ts             - Static interpretation engine (tone-aware)
+      enrichedMeanings.ts      - Makna kartu untuk /reading & /daily
+      liveAspectMeanings.ts    - Makna Hubungan/Karir/Nasib untuk Ramalan Live
+      live.ts                  - generateLiveDraw(), saveLiveDraw(), getLiveDraw()
+      daily.ts                 - Kartu harian (djb2 hash deterministik)
+      draw.ts                  - Fisher-Yates shuffle
+      layout.ts                - HTML shell + CSS design system
+      markdown.ts              - markdownToHtml()
+      icons.ts                 - SVG icons
+      config.ts                - Legacy LLM config helper (untuk /admin/health)
+  tiktok-listener/             - Bot Node.js (jalan terpisah di Termux/Render/VPS)
+  public/                      - Gambar kartu (78 JPG), icons, manifest PWA
+  .github/workflows/ci.yml     - Type check + deploy otomatis
+  wrangler.toml
+  tsconfig.json
 ```
 
 ---
@@ -81,19 +82,23 @@ Saat penonton mengirim gift target, bot Node.js memicu Worker → kartu ditarik 
 
 ```
 Penonton kirim gift di TikTok Live
-        ↓
+        |
+        v
 tiktok-listener/ (Node.js, Termux/VPS)
-        ↓  POST /api/live/trigger  [header: X-Live-Secret]
+        |  POST /api/live/trigger  [header: X-Live-Secret]
+        v
 Cloudflare Worker
-        ↓  tarik kartu → simpan ke KV live:current (TTL 6 jam)
+        |  tarik kartu -> simpan ke KV live:current (TTL 6 jam)
+        v
 GET /api/live/state  (di-poll tiap ~2 detik)
-        ↓
-/live → overlay HTML transparan → OBS Browser Source
+        |
+        v
+/live -> overlay HTML transparan -> OBS Browser Source
 ```
 
-Bot berjalan **terpisah** dari Worker karena `tiktok-live-connector` butuh koneksi Node.js yang persisten — tidak kompatibel dengan Cloudflare Workers runtime. TikTok tidak menyediakan API resmi untuk event live/gift, jadi bot ini memakai library reverse-engineering pihak ketiga dan hanya memanggil Worker lewat HTTP biasa.
+Bot berjalan **terpisah** dari Worker karena `tiktok-live-connector` butuh koneksi Node.js yang persisten - tidak kompatibel dengan Cloudflare Workers runtime. TikTok tidak menyediakan API resmi untuk event live/gift, jadi bot ini memakai library reverse-engineering pihak ketiga dan hanya memanggil Worker lewat HTTP biasa.
 
-Bot mendengar semua gift yang masuk, tapi hanya trigger draw kalau nama gift cocok dengan `TARGET_GIFT_NAME` dan jumlahnya ≥ `MIN_GIFT_COUNT`. Kalau jumlah gift ≥ `THREE_CARD_THRESHOLD`, otomatis menarik 3 kartu (Masa Lalu/Kini/Masa Depan); selain itu 1 kartu saja. Detail lengkap ada di `tiktok-listener/README.md`.
+Bot mendengar semua gift yang masuk, tapi hanya trigger draw kalau nama gift cocok dengan `TARGET_GIFT_NAME` dan jumlahnya >= `MIN_GIFT_COUNT`. Kalau jumlah gift >= `THREE_CARD_THRESHOLD`, otomatis menarik 3 kartu (Masa Lalu/Kini/Masa Depan); selain itu 1 kartu saja. Detail lengkap ada di `tiktok-listener/README.md`.
 
 ### Skema data `live:current` (KV)
 
@@ -116,7 +121,7 @@ Bot mendengar semua gift yang masuk, tapi hanya trigger draw kalau nama gift coc
       "aspect": { "hubungan": "...", "karir": "...", "nasib": "..." }
     }
   ],
-  "summary": "✦ Ramalan untuk @penonton\n\n**...**"
+  "summary": "Ramalan untuk @penonton\n\n**...**"
 }
 ```
 
@@ -161,7 +166,7 @@ wrangler tail           # pantau logs production
 cd tiktok-listener
 npm install
 cp .env.example .env
-# edit .env — isi TIKTOK_USERNAME, WORKER_URL, LIVE_SECRET (sama dengan di Worker),
+# edit .env - isi TIKTOK_USERNAME, WORKER_URL, LIVE_SECRET (sama dengan di Worker),
 # TARGET_GIFT_NAME, MIN_GIFT_COUNT, THREE_CARD_THRESHOLD, dst.
 npm start
 ```
@@ -174,9 +179,9 @@ Tambahkan **Browser Source** di OBS, arahkan ke:
 ```
 https://livejalur.muidsoft.com/live
 ```
-Background transparan, resolusi 1920×1080.
+Background transparan, resolusi 1920x1080.
 
-Untuk uji coba tanpa live TikTok beneran, buka `/admin/live` — ada tombol test draw manual.
+Untuk uji coba tanpa live TikTok beneran, buka `/admin/live` - ada tombol test draw manual.
 
 ---
 
@@ -185,11 +190,11 @@ Untuk uji coba tanpa live TikTok beneran, buka `/admin/live` — ada tombol test
 | Event | Yang terjadi |
 |-------|-------------|
 | Push ke branch apa pun / Pull Request | TypeScript type check (`tsc --noEmit`), Node.js 22 |
-| Push ke `master` | Type check → deploy ke Cloudflare Workers (`wrangler deploy --minify`), jika lulus |
+| Push ke `master` | Type check -> deploy ke Cloudflare Workers (`wrangler deploy --minify`), jika lulus |
 
 ### Secrets yang diperlukan di GitHub
 
-Buka **Settings → Secrets and variables → Actions**, tambahkan:
+Buka **Settings -> Secrets and variables -> Actions**, tambahkan:
 
 | Secret | Isi |
 |--------|-----|
@@ -204,26 +209,26 @@ Dependency di-update otomatis lewat `.github/dependabot.yml`.
 
 ```toml
 # Cloudflare Secrets (wrangler secret put ...)
-ADMIN_PASSWORD    # wajib — password untuk /admin
-LIVE_SECRET       # wajib untuk fitur live — harus sama dengan di tiktok-listener/.env
+ADMIN_PASSWORD    # wajib - password untuk /admin
+LIVE_SECRET       # wajib untuk fitur live - harus sama dengan di tiktok-listener/.env
 
 # KV Namespace (sudah terkonfigurasi di wrangler.toml)
-RATE_LIMIT_KV: id = "217d91b266db4ded99680b61b5b0183c"
+RATE_LIMIT_KV: id = "2545355c3b6e4012a1bddf0c66c181a0"
 ```
 
-Tidak ada variabel publik (`[vars]`) yang wajib — Ramalan Live 100% offline/statis, tanpa AI/LLM, tanpa API key eksternal.
+Tidak ada variabel publik (`[vars]`) yang wajib - Ramalan Live 100% offline/statis, tanpa AI/LLM, tanpa API key eksternal.
 
 ---
 
-## Storage — KV Keys
+## Storage - KV Keys
 
 | Data | TTL | Key Pattern |
 |------|-----|-------------|
 | Draw Ramalan Live terkini | 6 jam | `live:current` |
 | IP Blacklist | permanen | `blacklist:{IP}` |
 | Banner aktif | 30 hari | `banner:active` |
-| Riwayat Ramalan (browser) | — | `localStorage: jalurtarot-readings-v1` (max 50) |
-| Catatan harian (browser) | — | `localStorage: jalurtarot-daily-note-{dateKey}` |
+| Riwayat Ramalan (browser) | - | `localStorage: jalurtarot-readings-v1` (max 50) |
+| Catatan harian (browser) | - | `localStorage: jalurtarot-daily-note-{dateKey}` |
 
 ---
 
@@ -288,21 +293,21 @@ Tiga gaya interpretasi untuk `/reading` & `/daily` (Ramalan Live selalu memakai 
 
 **FX:** Film grain, vignette, star canvas, cursor candle glow
 
-**Nav:** Side nav desktop (56px) | Bottom nav mobile (72px, fixed) — 4 item: Home / Harian / Ramalan / Kartu
+**Nav:** Side nav desktop (56px) | Bottom nav mobile (72px, fixed) - 4 item: Home / Harian / Ramalan / Kartu
 
 ---
 
 ## Known Limitations
 
-- `tiktok-live-connector` adalah reverse-engineering pihak ketiga — bisa berhenti bekerja jika TikTok mengubah sistem internalnya.
+- `tiktok-live-connector` adalah reverse-engineering pihak ketiga - bisa berhenti bekerja jika TikTok mengubah sistem internalnya.
 - Bot TikTok harus tetap nyala manual selama live (gunakan `termux-wake-lock` + `tmux` di Termux, atau `pm2` di VPS).
-- `live:current` hanya menyimpan 1 draw terakhir — dua gift yang masuk hampir bersamaan hanya menampilkan yang paling baru.
-- Overlay polling tiap ~2 detik — ada delay ±2 detik antara trigger dan tampil di layar.
-- Bundle size — `cards.ts` + `enrichedMeanings.ts` + `liveAspectMeanings.ts` cukup besar, pantau jika mendekati limit 1MB Workers free tier.
-- `routes/agent.ts` dan `lib/config.ts` (legacy dari versi Oracle berbasis AI) masih ada di kode tapi tidak lagi terhubung ke fitur aktif — aman diabaikan.
+- `live:current` hanya menyimpan 1 draw terakhir - dua gift yang masuk hampir bersamaan hanya menampilkan yang paling baru.
+- Overlay polling tiap ~2 detik - ada delay +/-2 detik antara trigger dan tampil di layar.
+- Bundle size - `cards.ts` + `enrichedMeanings.ts` + `liveAspectMeanings.ts` cukup besar, pantau jika mendekati limit 1MB Workers free tier.
+- `routes/agent.ts` dan `lib/config.ts` (legacy dari versi Oracle berbasis AI) masih ada di kode tapi tidak lagi terhubung ke fitur aktif - aman diabaikan.
 
 ---
 
 ## Lisensi
 
-Private / internal project — tidak ada lisensi open-source publik saat ini.
+Private / internal project - tidak ada lisensi open-source publik saat ini.

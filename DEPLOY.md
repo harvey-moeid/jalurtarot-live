@@ -167,7 +167,7 @@ pattern = "namadomainmu.com/*"
 zone_name = "namadomainmu.com"
 ```
 
-Domain production saat ini: `jalurtarotfree.muidsoft.com` (lihat
+Domain production saat ini: `https://livejalur.muidsoft.com` (lihat
 `PROJECT_CONTEXT.md`).
 
 ---
