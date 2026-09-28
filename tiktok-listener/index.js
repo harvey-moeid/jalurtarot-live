@@ -1,6 +1,6 @@
 import 'dotenv/config';
 import WebSocket from 'ws';
-import { createWebSocketUrl, ClientCloseCode } from '@eulerstream/euler-websocket-sdk';
+import { createWebSocketUrl } from '@eulerstream/euler-websocket-sdk';
 
 const env = process.env;
 const required = ['TIKTOK_USERNAME', 'WORKER_URL', 'LIVE_SECRET'];
@@ -49,7 +49,11 @@ let reconnecting = false;
 let shuttingDown = false;
 let connected = false;
 let reconnectAttempt = 0;
-let lastLikeMilestoneIndex = 0;
+// null = baseline like belum diambil untuk koneksi ini (lihat handleLike).
+// Sebelumnya di-reset ke 0 setiap connect, sehingga setelah reconnect (atau saat
+// bergabung ke room yang sudah punya banyak like) event like pertama langsung
+// memicu draw milestone palsu.
+let lastLikeMilestoneIndex = null;
 const seenEventIds = new Map();
 
 // Debug/diagnostic counters - helps confirm whether ANY traffic is arriving
@@ -106,19 +110,34 @@ function giftName(msg) {
   return String(msg?.giftName || msg?.gift?.name || msg?.giftDetails?.giftName || msg?.gift?.giftName || 'Gift').trim();
 }
 
+// Nilai koin per SATU gift. Mengembalikan null (bukan 0) kalau tidak ada field
+// koin yang terbaca, supaya bisa dibedakan dari gift yang memang bernilai 0 dan
+// tidak dibuang diam-diam (lihat handleGift).
 function giftCoins(msg) {
   const direct = [msg?.diamondCount, msg?.gift?.diamondCount, msg?.giftDetails?.diamondCount,
     msg?.gift?.diamond_count, msg?.giftDetails?.diamond_count];
   for (const value of direct) {
     const n = Number(value);
-    if (Number.isFinite(n) && n >= 0) return n;
+    if (value !== undefined && value !== null && Number.isFinite(n) && n >= 0) return n;
   }
-  return 0;
+  return null;
 }
 
 function giftRepeat(msg) {
   const n = Number(msg?.giftCount ?? msg?.repeatCount ?? msg?.repeat_count ?? 1);
   return Number.isFinite(n) && n > 0 ? Math.floor(n) : 1;
+}
+
+// Gift "streakable" (giftType 1) dikirim berkali-kali selama streak: tiap update
+// punya msgId baru dan repeatCount kumulatif. Tanpa filter ini satu streak memicu
+// banyak draw. Hanya update terakhir (repeatEnd true/1) yang diproses.
+// Defensif: kalau field giftType/repeatEnd tidak ada di skema Euler, fungsi ini
+// mengembalikan false dan perilaku sama seperti sebelumnya. Verifikasi nama field
+// dengan DEBUG_EVENTS=1 saat ada gift streak.
+function isStreakInProgress(msg) {
+  const type = Number(msg?.giftType ?? msg?.gift?.type ?? msg?.gift?.giftType ?? msg?.giftDetails?.giftType);
+  const end = msg?.repeatEnd ?? msg?.repeat_end;
+  return type === 1 && (end === 0 || end === false);
 }
 
 async function triggerDraw({ sender, name, count, spread }) {
@@ -151,14 +170,41 @@ async function triggerDraw({ sender, name, count, spread }) {
 }
 
 function handleGift(msg) {
-  if (rememberEvent(msg?.msgId || msg?.messageId || msg?.common?.msgId)) return;
+  const sender = userName(msg);
   const name = giftName(msg);
   const count = giftRepeat(msg);
-  const coins = giftCoins(msg) * count;
-  if (targetGiftLower && name.toLowerCase() !== targetGiftLower) return;
-  if (coins < minGiftValue) return;
-  console.log('GIFT: ' + userName(msg) + ' mengirim ' + name + ' x' + count + ' (' + coins + ' koin)');
-  void triggerDraw({ sender: userName(msg), name, count, spread: coins >= threeCardMinValue ? 'three-card' : defaultSpread });
+
+  // Streak masih berjalan -> tunggu update terakhir (repeatEnd), jangan picu draw.
+  if (isStreakInProgress(msg)) {
+    if (debugEvents) console.log('GIFT STREAK: ' + sender + ' ' + name + ' x' + count + ' (menunggu streak selesai)');
+    return;
+  }
+
+  if (rememberEvent(msg?.msgId || msg?.messageId || msg?.common?.msgId)) return;
+
+  if (targetGiftLower && name.toLowerCase() !== targetGiftLower) {
+    if (debugEvents) console.log('GIFT DIABAIKAN: ' + sender + ' ' + name + ' bukan gift target "' + targetGift + '"');
+    return;
+  }
+
+  const unit = giftCoins(msg);
+  // Nilai koin tidak terbaca: jangan buang diam-diam. Kalau ada ambang minimum,
+  // beri peringatan beserta daftar field supaya nama field skema Euler bisa dicek.
+  if (unit === null && minGiftValue > 0) {
+    console.warn('GIFT DIABAIKAN: ' + sender + ' ' + name + ' x' + count +
+      ' - nilai koin tidak terbaca (MIN_GIFT_VALUE=' + minGiftValue + '). Field: ' +
+      Object.keys(msg || {}).join(','));
+    return;
+  }
+
+  const coins = (unit ?? 0) * count;
+  if (coins < minGiftValue) {
+    console.log('GIFT DIABAIKAN: ' + sender + ' ' + name + ' x' + count + ' (' + coins + ' koin) di bawah MIN_GIFT_VALUE=' + minGiftValue);
+    return;
+  }
+
+  console.log('GIFT: ' + sender + ' mengirim ' + name + ' x' + count + ' (' + coins + ' koin)');
+  void triggerDraw({ sender, name, count, spread: coins >= threeCardMinValue ? 'three-card' : defaultSpread });
 }
 
 function handleLike(msg) {
@@ -166,6 +212,16 @@ function handleLike(msg) {
   const total = Number(msg?.totalLikeCount ?? msg?.total_like_count ?? msg?.totalLike ?? 0);
   if (!Number.isFinite(total) || total <= 0) return;
   const index = Math.floor(total / likeMilestone);
+
+  // Event like pertama pada koneksi ini hanya dipakai sebagai baseline. Tanpa ini,
+  // reconnect / join di tengah live (total mis. 5300) langsung memicu draw untuk
+  // milestone 5000 yang sebenarnya sudah lewat sebelum listener tersambung.
+  if (lastLikeMilestoneIndex === null) {
+    lastLikeMilestoneIndex = index;
+    console.log('LIKE BASELINE: total ' + total + ' like, milestone berikutnya di ' + ((index + 1) * likeMilestone));
+    return;
+  }
+
   if (index <= lastLikeMilestoneIndex) return;
   lastLikeMilestoneIndex = index;
   const at = index * likeMilestone;
@@ -205,7 +261,7 @@ function connect() {
     connected = true;
     reconnecting = false;
     reconnectAttempt = 0;
-    lastLikeMilestoneIndex = 0;
+    lastLikeMilestoneIndex = null; // ambil baseline baru dari event like pertama
     totalMessagesReceived = 0;
     lastMessageAt = null;
     seenPacketTypes.clear();
