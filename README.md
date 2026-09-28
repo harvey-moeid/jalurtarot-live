@@ -4,7 +4,7 @@ Aplikasi baca tarot berbasis web untuk siaran **TikTok Live** — 100% statis, t
 
 Saat penonton mengirim gift target, bot Node.js memicu Worker → kartu ditarik otomatis → tampil di overlay OBS.
 
-🔗 **Production:** [jalurtarotfree.muidsoft.com](https://jalurtarotfree.muidsoft.com)
+🌐 **Production:** [livejalur.muidsoft.com](https://livejalur.muidsoft.com/)
 
 ---
 
@@ -88,7 +88,7 @@ Cloudflare Worker
         ↓  tarik kartu → simpan ke KV live:current (TTL 6 jam)
 GET /api/live/state  (di-poll tiap ~2 detik)
         ↓
-/live — overlay HTML transparan → OBS Browser Source
+/live → overlay HTML transparan → OBS Browser Source
 ```
 
 Bot berjalan **terpisah** dari Worker karena `tiktok-live-connector` butuh koneksi Node.js yang persisten — tidak kompatibel dengan Cloudflare Workers runtime. TikTok tidak menyediakan API resmi untuk event live/gift, jadi bot ini memakai library reverse-engineering pihak ketiga dan hanya memanggil Worker lewat HTTP biasa.
@@ -116,7 +116,7 @@ Bot mendengar semua gift yang masuk, tapi hanya trigger draw kalau nama gift coc
       "aspect": { "hubungan": "...", "karir": "...", "nasib": "..." }
     }
   ],
-  "summary": "… Ramalan untuk @penonton\n\n**...**"
+  "summary": "✦ Ramalan untuk @penonton\n\n**...**"
 }
 ```
 
@@ -172,7 +172,7 @@ Di Termux, jaga bot tetap hidup dengan `termux-wake-lock` + `tmux`/`pm2`. Lihat 
 
 Tambahkan **Browser Source** di OBS, arahkan ke:
 ```
-https://jalurtarotfree.muidsoft.com/live
+https://livejalur.muidsoft.com/live
 ```
 Background transparan, resolusi 1920×1080.
 
