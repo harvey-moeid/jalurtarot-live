@@ -64,6 +64,13 @@ async function listBlacklistEntries(env: AdminEnv): Promise<string[]> {
   try { return (await env.RATE_LIMIT_KV.list({ prefix: 'blacklist:' })).keys.map(k => k.name.replace('blacklist:', '')); } catch { return []; }
 }
 
+async function getBanner(env: AdminEnv): Promise<{ active: boolean; text: string; type: string } | null> {
+  try {
+    const raw = await env.RATE_LIMIT_KV.get('banner:active');
+    return raw ? JSON.parse(raw) : null;
+  } catch { return null; }
+}
+
 // ======================================
 // -- HTML ESCAPE HELPER --
 // Selalu gunakan ini sebelum render data dari KV/user ke HTML.
@@ -418,7 +425,7 @@ function adminShell(title: string, content: string, activePage: string = ''): st
 // ======================================
 
 // GET /admin/login
-admin.get('/login', (c) => {
+admin.get('/login', async (c) => {
   const error = c.req.query('error');
   // Jika sudah login, redirect langsung ke dashboard
   if (await isAuthenticated(c)) {
