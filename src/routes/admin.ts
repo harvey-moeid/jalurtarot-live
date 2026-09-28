@@ -789,7 +789,7 @@ admin.post('/login', async (c) => {
 });
 
 // POST /admin/logout
-admin.post('/logout', (c) => {
+admin.post('/logout', async (c) => {
   const token = getCookie(c, 'admin_token');
   if (token) {
     try { await c.env.RATE_LIMIT_KV.delete('admin:session:' + token); } catch {}
