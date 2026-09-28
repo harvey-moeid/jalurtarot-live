@@ -79,7 +79,10 @@ live.get('/state', async (c) => {
 export default live;
 
 // GET /live
-// Overlay layar penuh (portrait & landscape) untuk OBS Browser Source / perangkat.
+// Overlay layar penuh untuk OBS Browser Source / perangkat.
+// Layout: portrait (bawaan), desktop/landscape besar (bawaan), dan HP dimiringkan
+// (landscape pendek, max-height 520px): kartu di kiri, teks ramalan di kanan dan
+// bergulir otomatis bila lebih panjang dari ruang yang tersedia.
 export function liveOverlayPage(): string {
   return `<!DOCTYPE html>
 <html lang="id">
@@ -113,6 +116,7 @@ body{font-family:"Cormorant Garamond",serif;color:var(--cream);display:flex;alig
 .viewer{margin-top:14px;text-align:center;font-size:clamp(20px,3.2vw,32px);line-height:1.15}
 .viewer strong{color:var(--gold2);font-weight:600}
 .gift{display:flex;align-items:center;justify-content:center;gap:7px;margin:12px auto 0;padding:6px 11px;border:1px solid rgba(217,180,90,.18);border-radius:999px;background:rgba(217,180,90,.07);color:#d8d0c4;font-size:clamp(12px,2.2vw,15px)}
+.gift[hidden]{display:none}
 .gift-icon{display:inline-block;width:14px;height:14px;flex:none;vertical-align:-2px;color:var(--gold)}
 .cards-row{display:flex;justify-content:center;align-items:flex-start;gap:clamp(8px,1.8vw,22px);margin:clamp(28px,5vw,56px) auto;width:100%;max-width:100%}
 .live-card{width:clamp(150px,27vw,280px);max-width:31%;text-align:center}
@@ -144,6 +148,28 @@ body{align-items:center}
 .pos{font-size:8px}
 .summary{font-size:15px}
 }
+/* HP dimiringkan (landscape pendek): kartu kiri, teks kanan, tanpa scroll manual.
+   Tinggi kartu = min(56% tinggi layar, 24% lebar layar) supaya 3 kartu tidak
+   menghabiskan kolom teks pada layar sempit. Ditaruh paling akhir agar menimpa
+   aturan landscape di atas. */
+@media(orientation:landscape) and (max-height:520px){
+#stage{padding:max(8px,env(safe-area-inset-top)) max(18px,env(safe-area-inset-right)) max(8px,env(safe-area-inset-bottom)) max(18px,env(safe-area-inset-left));overflow:hidden}
+#stage.show{display:grid;grid-template-columns:auto minmax(0,1fr);grid-template-rows:auto auto auto minmax(0,1fr) auto;grid-template-areas:"cards kicker" "cards viewer" "cards gift" "cards summary" "cards footer";column-gap:clamp(12px,3vw,28px);align-items:start}
+#stage:before{inset:5px;border-radius:14px}
+.kicker{grid-area:kicker;font-size:9px;letter-spacing:.16em}
+.kicker:before,.kicker:after{width:14px}
+.viewer{grid-area:viewer;margin-top:4px;font-size:clamp(14px,5dvh,20px)}
+.gift{grid-area:gift;margin:5px auto 0;padding:3px 9px;font-size:11px}
+.cards-row{grid-area:cards;align-self:center;margin:0;width:auto;max-width:none;gap:clamp(6px,1.6vw,12px);flex-wrap:nowrap}
+.live-card{width:auto;max-width:none}
+.card-frame{padding:3px;border-radius:10px}
+.live-card img{width:auto;height:min(56vh,24vw);height:min(56dvh,24vw);border-radius:7px}
+.pos{margin-top:4px;font-size:8px}
+.name{margin-top:2px;font-size:12px}
+.state{margin-top:2px;font-size:9px}
+.summary{grid-area:summary;min-height:0;overflow:hidden;margin-top:6px;padding:7px 2px 0;text-align:left;font-size:clamp(11px,3.7vh,15px);font-size:clamp(11px,3.7dvh,15px);line-height:1.35}
+.footer{grid-area:footer;margin-top:4px;font-size:6px}
+}
 </style>
 </head>
 <body>
@@ -157,7 +183,7 @@ body{align-items:center}
 </main>
 <script>
 (function(){
-  var lastId=null,hideTimer=null,HIDE_AFTER_MS=45000;
+  var lastId=null,hideTimer=null,HIDE_AFTER_MS=45000,scrollRaf=0,scrollTimer=0;
   function esc(s){return String(s ?? "").replace(/[&<>"]/g,function(m){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[m]})}
   var ICONS={
     spark:'<svg class="icon-sum" viewBox="0 0 24 24"><path d="M12 2l2.4 6.6L21 11l-6.6 2.4L12 20l-2.4-6.6L3 11l6.6-2.4z"/></svg>',
@@ -168,6 +194,25 @@ body{align-items:center}
   function md(s){
     var t=esc(s).replace(/\\*\\*(.+?)\\*\\*/g,"<strong>$1</strong>").replace(/\\n/g,"<br/>");
     return t.replace(/::(spark|heart|briefcase|crystal)::/g,function(_,n){return ICONS[n]||""});
+  }
+  // Teks ramalan yang lebih panjang dari kotaknya (layout HP dimiringkan) digulir
+  // pelan ke bawah setelah jeda baca 3,5 detik; selesai sebelum overlay disembunyikan.
+  // Pada layout lain kotak ini tidak overflow, jadi fungsi ini tidak melakukan apa-apa.
+  function autoScroll(el){
+    cancelAnimationFrame(scrollRaf);clearTimeout(scrollTimer);
+    el.scrollTop=0;
+    scrollTimer=setTimeout(function(){
+      var max=el.scrollHeight-el.clientHeight;
+      if(max<=2)return;
+      var dur=Math.min(HIDE_AFTER_MS-8000,Math.max(6000,max*45)),start=null;
+      function step(t){
+        if(start===null)start=t;
+        var p=Math.min(1,(t-start)/dur);
+        el.scrollTop=max*p;
+        if(p<1)scrollRaf=requestAnimationFrame(step);
+      }
+      scrollRaf=requestAnimationFrame(step);
+    },3500);
   }
   function render(draw){
     var stage=document.getElementById("stage"),viewer=document.getElementById("viewer"),gift=document.getElementById("gift"),row=document.getElementById("cards-row"),summary=document.getElementById("summary");
@@ -186,6 +231,7 @@ body{align-items:center}
     }).join("");
     summary.innerHTML=md(draw.summary||"Pembacaan sedang diproses...");
     stage.classList.remove("show"); void stage.offsetWidth; stage.classList.add("show");
+    autoScroll(summary);
     if(hideTimer)clearTimeout(hideTimer);
     hideTimer=setTimeout(function(){stage.classList.remove("show")},HIDE_AFTER_MS);
   }

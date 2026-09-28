@@ -21,6 +21,16 @@ Jika field tidak ada, `isStreakInProgress()` mengembalikan `false` (perilaku lam
 |---|-----------|--------|
 | 3 | `GET /api/live/state` hanya mengembalikan draw berumur <= 45 detik (jam server) | KV menyimpan draw 6 jam; overlay yang dibuka / di-refresh menampilkan draw lama |
 | 8 | Perbandingan `X-Live-Secret` memakai `safeEqual()` | Tidak short-circuit, mengurangi risiko timing attack |
+| - | Layout khusus HP dimiringkan (`@media(orientation:landscape) and (max-height:520px)`) | Layout lama menumpuk semua elemen ke bawah sehingga di layar pendek (tinggi 320-430px) teks terpotong |
+| - | `autoScroll()` menggulir teks ramalan bila lebih panjang dari kotaknya | Teks tiga kartu tidak muat di layar pendek; digulir setelah jeda 3,5 detik dan selesai sebelum overlay disembunyikan |
+| - | Aturan `.gift[hidden]{display:none}` | `.gift{display:flex}` mengalahkan atribut `hidden`, sehingga pil kosong tampil saat draw tanpa gift |
+
+### Layout HP dimiringkan
+
+- Kartu di kolom kiri, kicker / nama penonton / gift / teks ramalan di kolom kanan (CSS grid).
+- Tinggi gambar kartu = `min(56% tinggi layar, 24% lebar layar)`: pada layar sempit tiga kartu tidak memakan kolom teks.
+- Layout portrait dan desktop/landscape besar (tinggi > 520px) tidak berubah.
+- Belum diuji di perangkat: cek dengan test draw `single` dan `three-card` pada HP dimiringkan.
 
 `LIVE_STATE_MAX_AGE_MS` (45 detik) harus disamakan dengan `HIDE_AFTER_MS` di overlay.
 
@@ -34,4 +44,4 @@ Jika field tidak ada, `isStreakInProgress()` mengembalikan `false` (perilaku lam
 ## Tidak diubah (sesuai keputusan)
 
 - `LIKE_MILESTONE` diatur lewat env.
-- Overlay tetap layar penuh (mendukung landscape).
+- Overlay tetap layar penuh.
