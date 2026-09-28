@@ -8,12 +8,16 @@ export type LiveEnv = ApiEnv & {
 
 const live = new Hono<{ Bindings: LiveEnv }>();
 
-// Draw yang lebih tua dari ini tidak dikirim lagi oleh /state. Disamakan dengan
-// HIDE_AFTER_MS di overlay (45 detik): draw selebar itu memang sudah disembunyikan,
-// jadi tidak ada yang hilang dari alur normal. Yang dicegah: overlay yang dibuka /
-// di-refresh menampilkan draw lama (KV menyimpannya sampai 6 jam).
+// Draw yang lebih tua dari ini tidak dikirim lagi oleh /state. Tujuannya mencegah
+// overlay yang dibuka / di-refresh menampilkan draw lama (KV menyimpannya sampai 6 jam).
 // Memakai jam server (bukan jam browser) supaya tidak terpengaruh jam perangkat.
-const LIVE_STATE_MAX_AGE_MS = 45_000;
+//
+// Nilai ini SENGAJA lebih besar dari HIDE_AFTER_MS di overlay (45 detik). KV bersifat
+// eventually consistent: draw yang ditulis dari satu lokasi Cloudflare bisa baru terbaca
+// di lokasi lain setelah 60 detik atau lebih. Dengan batas 45 detik, draw yang terlambat
+// sampai dibuang dan overlay tidak pernah menampilkannya. 120 detik memberi ruang untuk
+// keterlambatan itu; overlay tetap menyembunyikan draw 45 detik setelah tampil.
+const LIVE_STATE_MAX_AGE_MS = 120_000;
 
 function isValidSpreadId(value: unknown): value is LiveSpreadId {
   return value === 'single' || value === 'three-card';
@@ -158,7 +162,7 @@ body{align-items:center}
 </main>
 <script>
 (function(){
-  var lastId=null,hideTimer=null,HIDE_AFTER_MS=45000;
+  var lastId=null,hideTimer=null,pollTimer=null,polling=false,HIDE_AFTER_MS=45000;
   function esc(s){return String(s ?? "").replace(/[&<>"]/g,function(m){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[m]})}
   var ICONS={
     spark:'<svg class="icon-sum" viewBox="0 0 24 24"><path d="M12 2l2.4 6.6L21 11l-6.6 2.4L12 20l-2.4-6.6L3 11l6.6-2.4z"/></svg>',
@@ -190,19 +194,32 @@ body{align-items:center}
     if(hideTimer)clearTimeout(hideTimer);
     hideTimer=setTimeout(function(){stage.classList.remove("show")},HIDE_AFTER_MS);
   }
+  // Hanya boleh ada SATU loop polling. schedule() selalu membatalkan timer yang
+  // masih menunggu, jadi visibilitychange tidak lagi menambah loop paralel.
+  function schedule(ms){
+    if(pollTimer)clearTimeout(pollTimer);
+    pollTimer=setTimeout(poll,ms);
+  }
   async function poll(){
+    if(polling)return;
+    if(document.hidden){schedule(3000);return}
+    polling=true;
+    var ctrl=new AbortController();
+    var to=setTimeout(function(){ctrl.abort()},8000);
     try{
-      var res=await fetch("/api/live/state?t="+Date.now(),{cache:"no-store"});
+      var res=await fetch("/api/live/state?t="+Date.now(),{cache:"no-store",signal:ctrl.signal});
       if(!res.ok)throw new Error("state "+res.status);
       var data=await res.json();
       if(data.draw){if(data.draw.id!==lastId){lastId=data.draw.id;render(data.draw)}}
     }catch(e){}
-    setTimeout(poll,1000);
+    clearTimeout(to);
+    polling=false;
+    schedule(1000);
   }
   if('serviceWorker' in navigator){
     navigator.serviceWorker.register('/sw-live.js').catch(function(){});
   }
-  document.addEventListener("visibilitychange",function(){if(!document.hidden)poll()});
+  document.addEventListener("visibilitychange",function(){if(!document.hidden)schedule(0)});
   poll();
 })();
 </script>
