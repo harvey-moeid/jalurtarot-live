@@ -199,8 +199,13 @@ function handleGift(msg) {
 
 function handleLike(msg) {
   if (!likeMilestone) return;
+  // Field dikonfirmasi dari dokumentasi TikTok-Live-Connector: likeCount (batch) dan
+  // totalLikeCount (total room). Yang dipakai untuk milestone adalah totalLikeCount.
   const total = Number(msg?.totalLikeCount ?? msg?.total_like_count ?? msg?.totalLike ?? 0);
-  if (!Number.isFinite(total) || total <= 0) return;
+  if (!Number.isFinite(total) || total <= 0) {
+    if (debugEvents) console.log('LIKE DIABAIKAN: totalLikeCount tidak terbaca. Field: ' + Object.keys(msg || {}).join(','));
+    return;
+  }
   const index = Math.floor(total / likeMilestone);
 
   // Event like pertama pada koneksi ini hanya dipakai sebagai baseline. Tanpa ini,
@@ -217,7 +222,9 @@ function handleLike(msg) {
   const at = index * likeMilestone;
   const sender = userName(msg);
   console.log('LIKE MILESTONE: total ' + total + ' like (>= ' + at + '), dari ' + sender);
-  void triggerDraw({ sender, name: likeMilestone + ' Like', count: at, spread: 'single' });
+  // Lewat antrean yang sama dengan gift supaya dua draw tidak saling menimpa saat
+  // dikirim bersamaan. Label: "5000 Like" (bukan "1000 Like x 5000").
+  void enqueueDraw(() => triggerDraw({ sender, name: at + ' Like', count: 1, spread: 'single' }));
 }
 
 function connect() {
