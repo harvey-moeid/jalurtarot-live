@@ -1,5 +1,4 @@
 import { Hono } from 'hono';
-import type { Env } from './api';
 import { generateLiveDraw, saveLiveDraw, getLiveDraw, type LiveSpreadId } from '../lib/live';
 
 import type { AdminEnv } from '../middleware/adminAuth';
