@@ -24,7 +24,8 @@ type AdminEnv = Env & {
   OPENROUTER_API_KEY_5?: string;
 };
 
-const admin = new Hono<{ Bindings: AdminEnv }>();
+// Admin has a large route surface; keep Hono's route generic from exploding during tsc.
+const admin = new Hono<any>();
 
 // Login/logout are public; every other /admin route requires a live KV-backed session.
 admin.use('*', async (c, next) => {
