@@ -29,7 +29,10 @@ const admin = new Hono<{ Bindings: AdminEnv }>();
 // Login/logout are public; every other /admin route requires a live KV-backed session.
 admin.use('*', async (c, next) => {
   const path = c.req.path;
-  if (path === '/login' || path === '/logout') return next();
+  if (path === '/login' || path === '/logout') {
+    await next();
+    return;
+  }
   if (!(await isAuthenticated(c))) return c.redirect('/admin/login');
   await next();
 });
