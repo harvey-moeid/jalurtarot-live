@@ -29,6 +29,19 @@ jobs:
       - name: TypeScript check
         run: npx tsc --noEmit
 
+  worker-tests:
+    name: Worker Regression Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Run worker regression tests
+        run: npm test
+
   listener-tests:
     name: Listener Logic Tests
     runs-on: ubuntu-latest
