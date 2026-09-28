@@ -1,11 +1,8 @@
 import { createMiddleware } from 'hono/factory';
 import type { Env } from '../routes/api';
 
-// --- Extend Env untuk ADMIN_PASSWORD ---
-// Catatan: field OpenRouter di bawah ini hanya dipertahankan supaya halaman
-// legacy /admin/health & /admin/credits (fitur AI, sudah dimatikan) tetap
-// lolos type-check. Aplikasi utama (api.ts) sudah tidak memakainya lagi -
-// Ramalan Live 100% statis tanpa AI.
+// --- Admin environment ---
+// Aplikasi Live menggunakan data kartu dan interpretasi lokal; tidak ada ketergantungan LLM.
 export type AdminEnv = Env & {
   ADMIN_PASSWORD: string;
   LIVE_SECRET?: string;
