@@ -1,12 +1,12 @@
 /**
- * Draw functions · Pure, no side-effects, no React dependency.
+ * Draw functions - Pure, no side-effects, no React dependency.
  * FIX IMP-4: Replaced biased sort-shuffle with Fisher-Yates algorithm.
  */
 
 import { allCards } from './cards';
 import { DrawnCard, Spread, SpreadPosition } from './types';
 
-/** Fisher-Yates unbiased shuffle — O(n), uniform distribution */
+/** Fisher-Yates unbiased shuffle - O(n), uniform distribution */
 function fisherYates<T>(arr: T[]): T[] {
   const a = [...arr];
   for (let i = a.length - 1; i > 0; i--) {
@@ -26,7 +26,7 @@ export function drawCardsForSpread(spread: Spread): DrawnCard[] {
   }));
 }
 
-// ─── Supplementary cards (follow-up questions) ────────────────────────
+// --- Supplementary cards (follow-up questions) ---
 
 const SUPPLEMENTARY_CN_NAMES = ['Tambahan 1', 'Tambahan 2', 'Tambahan 3', 'Tambahan 4', 'Tambahan 5'];
 

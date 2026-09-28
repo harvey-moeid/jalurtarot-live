@@ -1,6 +1,9 @@
 import 'dotenv/config';
 import WebSocket from 'ws';
 import { createWebSocketUrl } from '@eulerstream/euler-websocket-sdk';
+import { userName, giftName, giftCoins, giftRepeat, isStreakInProgress } from './logic.js';
+import { enqueueDraw } from './queue.js';
+
 
 const env = process.env;
 const required = ['TIKTOK_USERNAME', 'WORKER_URL', 'LIVE_SECRET'];
@@ -102,31 +105,12 @@ function rememberEvent(id) {
   return false;
 }
 
-function userName(msg) {
-  return String(msg?.user?.uniqueId || msg?.user?.displayId || msg?.uniqueId || msg?.nickname || 'Penonton').trim() || 'Penonton';
-}
 
-function giftName(msg) {
-  return String(msg?.giftName || msg?.gift?.name || msg?.giftDetails?.giftName || msg?.gift?.giftName || 'Gift').trim();
-}
 
 // Nilai koin per SATU gift. Mengembalikan null (bukan 0) kalau tidak ada field
 // koin yang terbaca, supaya bisa dibedakan dari gift yang memang bernilai 0 dan
 // tidak dibuang diam-diam (lihat handleGift).
-function giftCoins(msg) {
-  const direct = [msg?.diamondCount, msg?.gift?.diamondCount, msg?.giftDetails?.diamondCount,
-    msg?.gift?.diamond_count, msg?.giftDetails?.diamond_count];
-  for (const value of direct) {
-    const n = Number(value);
-    if (value !== undefined && value !== null && Number.isFinite(n) && n >= 0) return n;
-  }
-  return null;
-}
 
-function giftRepeat(msg) {
-  const n = Number(msg?.giftCount ?? msg?.repeatCount ?? msg?.repeat_count ?? 1);
-  return Number.isFinite(n) && n > 0 ? Math.floor(n) : 1;
-}
 
 // Gift "streakable" (giftType 1) dikirim berkali-kali selama streak: tiap update
 // punya msgId baru dan repeatCount kumulatif. Tanpa filter ini satu streak memicu
@@ -134,39 +118,43 @@ function giftRepeat(msg) {
 // Defensif: kalau field giftType/repeatEnd tidak ada di skema Euler, fungsi ini
 // mengembalikan false dan perilaku sama seperti sebelumnya. Verifikasi nama field
 // dengan DEBUG_EVENTS=1 saat ada gift streak.
-function isStreakInProgress(msg) {
-  const type = Number(msg?.giftType ?? msg?.gift?.type ?? msg?.gift?.giftType ?? msg?.giftDetails?.giftType);
-  const end = msg?.repeatEnd ?? msg?.repeat_end;
-  return type === 1 && (end === 0 || end === false);
-}
 
 async function triggerDraw({ sender, name, count, spread }) {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), workerTimeoutMs);
-  try {
-    const response = await fetch(workerUrl + '/api/live/trigger', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Live-Secret': liveSecret },
-      body: JSON.stringify({ username: sender, giftName: name || 'Gift', giftCount: count, spreadId: spread }),
-      signal: controller.signal,
-    });
-    const bodyText = await response.text().catch(() => '');
-    if (!response.ok) {
-      console.error('WORKER ERROR: HTTP ' + response.status + (bodyText ? ' - ' + bodyText.slice(0, 250) : ''));
-      return false;
+  const maxAttempts = 3;
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), workerTimeoutMs);
+    try {
+      const response = await fetch(workerUrl + '/api/live/trigger', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Live-Secret': liveSecret },
+        body: JSON.stringify({ username: sender, giftName: name || 'Gift', giftCount: count, spreadId: spread }),
+        signal: controller.signal,
+      });
+      const bodyText = await response.text().catch(() => '');
+      if (response.ok) {
+        let result;
+        try { result = bodyText ? JSON.parse(bodyText) : null; }
+        catch { console.error('WORKER ERROR: respons bukan JSON valid.'); return false; }
+        const cards = result?.draw?.cards?.map(card => card.nameCn).filter(Boolean).join(', ') || '-';
+        console.log('DRAW OK: ' + sender + ' -> ' + cards);
+        return true;
+      }
+
+      const retryable = response.status === 502 || response.status === 503 || response.status === 504;
+      console.error('WORKER ERROR: HTTP ' + response.status + (bodyText ? ' - ' + bodyText.slice(0, 250) : '') + (retryable && attempt < maxAttempts ? ' - retry...' : ''));
+      if (!retryable || attempt === maxAttempts) return false;
+    } catch (error) {
+      const retryable = error?.name === 'AbortError' || error?.name === 'TypeError';
+      console.error('WORKER ERROR: ' + (error?.name === 'AbortError' ? 'timeout setelah ' + workerTimeoutMs + ' ms' : (error?.message || error)) + (retryable && attempt < maxAttempts ? ' - retry...' : ''));
+      if (!retryable || attempt === maxAttempts) return false;
+    } finally {
+      clearTimeout(timeout);
     }
-    let result;
-    try { result = bodyText ? JSON.parse(bodyText) : null; }
-    catch { console.error('WORKER ERROR: respons bukan JSON valid.'); return false; }
-    const cards = result?.draw?.cards?.map(card => card.nameCn).filter(Boolean).join(', ') || '-';
-    console.log('DRAW OK: ' + sender + ' -> ' + cards);
-    return true;
-  } catch (error) {
-    console.error('WORKER ERROR: ' + (error?.name === 'AbortError' ? 'timeout setelah ' + workerTimeoutMs + ' ms' : (error?.message || error)));
-    return false;
-  } finally {
-    clearTimeout(timeout);
+
+    await new Promise(resolve => setTimeout(resolve, 500 * attempt));
   }
+  return false;
 }
 
 function handleGift(msg) {
@@ -204,7 +192,7 @@ function handleGift(msg) {
   }
 
   console.log('GIFT: ' + sender + ' mengirim ' + name + ' x' + count + ' (' + coins + ' koin)');
-  void triggerDraw({ sender, name, count, spread: coins >= threeCardMinValue ? 'three-card' : defaultSpread });
+  void enqueueDraw(() => triggerDraw({ sender, name, count, spread: coins >= threeCardMinValue ? 'three-card' : defaultSpread }));
 }
 
 function handleLike(msg) {

@@ -1,6 +1,6 @@
 import { TarotCard, Suit } from './types';
 
-// 大阿卡纳 (Major Arcana) - 22张
+// å¤§é¿å¡çº³ (Major Arcana) - 22å¼ 
 const majorArcana: TarotCard[] = [
   {
     id: 'major-00',
@@ -356,7 +356,7 @@ const majorArcana: TarotCard[] = [
   }
 ];
 
-// 小阿卡纳生成函数
+// å°é¿å¡çº³çæå½æ°
 function createMinorArcana(suit: Suit, suitNameCn: string): TarotCard[] {
   const courtCards = [
     { num: 11, name: 'Page', nameCn: 'Page' },
@@ -365,7 +365,7 @@ function createMinorArcana(suit: Suit, suitNameCn: string): TarotCard[] {
     { num: 14, name: 'King', nameCn: 'King' }
   ];
 
-  // 小阿卡纳关键词与正逆位表述（按花色独立定制，基于标准伟特塔罗牌义）
+  // å°é¿å¡çº³å³é®è¯ä¸æ­£éä½è¡¨è¿°ï¼æè±è²ç¬ç«å®å¶ï¼åºäºæ åä¼ç¹å¡ç½çä¹ï¼
   const minorKeywords: Record<Suit, Record<number, { upright: string[]; reversed: string[] }>> = {
     wands: {
   1: { upright: ['Kreasi', 'Inspirasi', 'Tindakan Baru', 'Antusias', 'Potensi'], reversed: ['Tertunda', 'Kurang Semangat', 'Frustrasi'] },
@@ -433,7 +433,7 @@ function createMinorArcana(suit: Suit, suitNameCn: string): TarotCard[] {
     }
   };
 
-  // 小阿卡纳正逆位完整表述（与关键词匹配，提供更自然、解释性的描述）
+  // å°é¿å¡çº³æ­£éä½å®æ´è¡¨è¿°ï¼ä¸å³é®è¯å¹éï¼æä¾æ´èªç¶ãè§£éæ§çæè¿°ï¼
   const minorMeanings: Record<Suit, Record<number, { upright: string; reversed: string }>> = {
     wands: {
   1: { upright: 'Percikan kreasi menyala, saatnya mewujudkan ide dengan berani dan merintis jalanmu.', reversed: 'Kreativitas atau semangat terhambat sementara. Tindakan tertunda, perlu menemukan kembali motivasi.' },
@@ -540,13 +540,13 @@ function createMinorArcana(suit: Suit, suitNameCn: string): TarotCard[] {
   return cards;
 }
 
-// 生成所有小阿卡纳
+// çæææå°é¿å¡çº³
 const wands = createMinorArcana('wands', 'Tongkat');
 const cups = createMinorArcana('cups', 'Cawan');
 const swords = createMinorArcana('swords', 'Pedang');
 const pentacles = createMinorArcana('pentacles', 'Koin');
 
-// 导出完整的78张牌
+// å¯¼åºå®æ´ç78å¼ ç
 export const allCards: TarotCard[] = [
   ...majorArcana,
   ...wands,
@@ -558,17 +558,17 @@ export const allCards: TarotCard[] = [
 export const majorArcanaCards = majorArcana;
 export const minorArcanaCards = [...wands, ...cups, ...swords, ...pentacles];
 
-// 按花色获取牌
+// æè±è²è·åç
 export function getCardsBySuit(suit: Suit): TarotCard[] {
   return allCards.filter(card => card.suit === suit);
 }
 
-// 获取大阿卡纳
+// è·åå¤§é¿å¡çº³
 export function getMajorArcana(): TarotCard[] {
   return majorArcana;
 }
 
-// 随机抽牌
+// éæºæ½ç
 export function drawRandomCards(count: number): TarotCard[] {
   const shuffled = [...allCards].sort(() => Math.random() - 0.5);
   return shuffled.slice(0, count);

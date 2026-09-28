@@ -35,7 +35,7 @@ export function readingPage(): string {
       ════════════════════ -->
       <div id="phase-question" class="phase-panel reading-phase" aria-label="Fase Pertanyaan">
         <div class="phase-header">
-          <p class="phase-label">BABAK I · PERTANYAAN</p>
+          <p class="phase-label">BABAK I Â· PERTANYAAN</p>
           <h1 class="font-display text-bone phase-title">Apa yang kamu cari?</h1>
           <p class="font-body text-bone-faint phase-subtitle">Pusatkan pikiranmu, biarkan pertanyaan muncul dari dalam</p>
         </div>
@@ -70,7 +70,7 @@ export function readingPage(): string {
       ════════════════════ -->
       <div id="phase-spread" class="phase-panel reading-phase hidden" aria-label="Fase Pilih Susunan">
         <div class="phase-header">
-          <p class="phase-label">BABAK II · PILIH SUSUNAN</p>
+          <p class="phase-label">BABAK II Â· PILIH SUSUNAN</p>
           <h2 class="font-heading text-bone phase-title" style="font-size:clamp(1.3rem,3vw,2rem);">Bentuk Takdir</h2>
           <p id="spread-suggestion" class="font-body text-gold-dim" style="font-size:0.85rem;font-style:italic;margin-top:0.5rem;min-height:1.3em;" aria-live="polite"></p>
         </div>
@@ -85,7 +85,7 @@ export function readingPage(): string {
            PHASE 3: SHUFFLE
       ════════════════════ -->
       <div id="phase-shuffle" class="phase-panel reading-phase hidden" style="text-align:center;" aria-label="Fase Kocok Kartu">
-        <p class="phase-label">BABAK III · KOCOK KARTU</p>
+        <p class="phase-label">BABAK III Â· KOCOK KARTU</p>
         <!-- FIX: Hapus duplikat id="deck-visual-btn" — hanya pakai satu id yang benar -->
         <button id="deck-visual-btn" class="deck-visual-btn"
           aria-label="Klik untuk mengocok kartu">
@@ -112,7 +112,7 @@ export function readingPage(): string {
       ════════════════════ -->
       <div id="phase-draw" class="phase-panel reading-phase hidden" style="max-width:960px;width:100%;" aria-label="Fase Tarik Kartu">
         <div class="phase-header">
-          <p class="phase-label">BABAK IV · TARIK KARTU</p>
+          <p class="phase-label">BABAK IV Â· TARIK KARTU</p>
           <h2 class="font-heading text-bone phase-title" id="draw-title" style="font-size:1.4rem;">Sentuh kartu satu per satu</h2>
           <p class="font-body text-bone-faint phase-subtitle">Setiap sentuhan membuka sebuah cermin</p>
         </div>
@@ -127,7 +127,7 @@ export function readingPage(): string {
       ════════════════════ -->
       <div id="phase-interpret" class="phase-panel reading-phase hidden" style="max-width:860px;width:100%;" aria-label="Fase Interpretasi Oracle">
         <div class="phase-header">
-          <p class="phase-label">BABAK V · ORACLE</p>
+          <p class="phase-label">BABAK V Â· ORACLE</p>
           <h2 class="font-heading text-bone phase-title" style="font-size:1.4rem;">Oracle Berbicara</h2>
         </div>
 
@@ -137,7 +137,7 @@ export function readingPage(): string {
         <!-- Mode badge (tone aktif + static notice) -->
         <div id="mode-badge-row" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.85rem;flex-wrap:wrap;gap:0.5rem;">
           <span id="tone-badge" class="font-heading" style="font-size:9px;letter-spacing:0.2em;color:var(--gold-dim);border:1px solid var(--gold-faint);padding:3px 10px;"></span>
-          <span id="static-notice" style="display:none;font-family:var(--font-heading);font-size:9px;letter-spacing:0.15em;color:var(--mist);border:1px solid rgba(92,110,144,0.3);padding:3px 10px;">MODE HENING · Bisikan sunyi</span>
+          <span id="static-notice" style="display:none;font-family:var(--font-heading);font-size:9px;letter-spacing:0.15em;color:var(--mist);border:1px solid rgba(92,110,144,0.3);padding:3px 10px;">MODE HENING Â· Bisikan sunyi</span>
         </div>
 
         <!-- Interpretation panel -->
@@ -509,7 +509,7 @@ export function readingPage(): string {
       } else {
         // Kocok tambahan — update hint dengan counter
         const hint = document.getElementById('shuffle-hint');
-        if (hint) hint.textContent = \`Dikocok \${_shuffleCount}×. Siap saat kamu siap.\`;
+        if (hint) hint.textContent = \`Dikocok \${_shuffleCount}Ã. Siap saat kamu siap.\`;
       }
     }
 

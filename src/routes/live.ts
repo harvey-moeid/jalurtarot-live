@@ -61,7 +61,8 @@ live.post('/trigger', async (c) => {
   const giftCount = typeof body?.giftCount === 'number' ? body.giftCount : undefined;
 
   const draw = generateLiveDraw(spreadId, username, giftName, giftCount);
-  await saveLiveDraw(c.env, draw);
+  const saved = await saveLiveDraw(c.env, draw);
+  if (!saved) return c.json({ error: 'Gagal menyimpan draw ke storage' }, 503);
 
   return c.json({ ok: true, draw });
 });

@@ -123,13 +123,14 @@ export function generateLiveDraw(
   };
 }
 
-export async function saveLiveDraw(env: { RATE_LIMIT_KV: KVNamespace }, draw: LiveDraw): Promise<void> {
+export async function saveLiveDraw(env: { RATE_LIMIT_KV: KVNamespace }, draw: LiveDraw): Promise<boolean> {
   try {
     await env.RATE_LIMIT_KV.put(STATE_KEY, JSON.stringify(draw), {
       expirationTtl: STATE_TTL_SECONDS,
     });
+    return true;
   } catch {
-    /* fail open - overlay cukup tidak dapat update baru */
+    return false;
   }
 }
 

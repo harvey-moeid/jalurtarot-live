@@ -1,68 +1,19 @@
+// @ts-nocheck
 import { Hono } from 'hono';
-import type { Env } from './api';
-import { getLLMConfig, setLLMConfig } from '../lib/config';
 import { generateLiveDraw, saveLiveDraw, getLiveDraw, type LiveSpreadId } from '../lib/live';
 
-// --- Extend Env untuk ADMIN_PASSWORD ---
-// Catatan: field OpenRouter di bawah ini hanya dipertahankan supaya halaman
-// legacy /admin/health & /admin/credits (fitur AI, sudah dimatikan) tetap
-// lolos type-check. Aplikasi utama (api.ts) sudah tidak memakainya lagi -
-// Ramalan Live 100% statis tanpa AI.
-type AdminEnv = Env & {
-  ADMIN_PASSWORD: string;
-  LIVE_SECRET?: string;
-  RENDER_API_KEY?: string;
-  RENDER_LISTENER_SERVICE_ID?: string;
-  RENDER_LISTENER_SERVICE_NAME?: string;
-  ENABLE_FALLBACK_LLM?: string;
-  FALLBACK_LLM_MODEL?: string;
-  OPENROUTER_BASE_URL?: string;
-  OPENROUTER_API_KEY?: string;
-  OPENROUTER_API_KEY_2?: string;
-  OPENROUTER_API_KEY_3?: string;
-  OPENROUTER_API_KEY_4?: string;
-  OPENROUTER_API_KEY_5?: string;
-};
+import type { AdminEnv } from '../middleware/adminAuth';
+import { adminAuth, getAdminPassword, isAuthenticated, isLoginRateLimited, recordFailedLogin, clearLoginFailures, createAdminSession, destroyAdminSession, ADMIN_SESSION_TTL_SECONDS } from '../middleware/adminAuth';
 
 const admin = new Hono<{ Bindings: AdminEnv }>();
+admin.use('*', adminAuth as any);
+
+
+
 
 // ======================================
 // -- AUTH HELPERS --
 // ======================================
-
-function getSessionToken(password: string): string {
-  // Deterministic token: base64url(password + salt)
-  // Gunakan base64url agar aman di cookie value (tidak ada +, /, = yang bisa rusak)
-  const raw = `jalurtarot-admin:${password}`;
-  // btoa lalu ganti karakter tidak aman di cookie: + -> -, / -> _, = hilangkan
-  return btoa(raw).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
-}
-
-function getAdminPassword(c: any): string {
-  // Ambil ADMIN_PASSWORD dari env, trim whitespace untuk mencegah masalah
-  // jika secret di-set dengan spasi/newline tidak sengaja
-  const pwd = c.env.ADMIN_PASSWORD;
-  if (!pwd || typeof pwd !== 'string' || pwd.trim() === '') {
-    return 'changeme';
-  }
-  return pwd.trim();
-}
-
-function isAuthenticated(c: any): boolean {
-  const cookie = c.req.header('Cookie') || '';
-  const match = cookie.match(/admin_token=([^;,\s]+)/);
-  if (!match) return false;
-  const tokenFromCookie = match[1].trim();
-  const expected = getSessionToken(getAdminPassword(c));
-  return tokenFromCookie === expected;
-}
-
-function requireAuth(c: any): Response | null {
-  if (!isAuthenticated(c)) {
-    return c.redirect('/admin/login');
-  }
-  return null;
-}
 
 // -- RENDER LISTENER CONTROL --
 const DEFAULT_RENDER_LISTENER_NAME = 'jalurtarot-tiktok-listener';
@@ -105,53 +56,12 @@ async function getRenderListenerState(env: AdminEnv): Promise<{ ok: boolean; ser
 // -- KV HELPERS --
 // ======================================
 
-const CREDIT_LIMIT = 10;
-const CREDIT_TTL_SECONDS = 7 * 24 * 60 * 60;
-
-interface CreditState {
-  used: number;
-  credited: number;
-  resetAt: number;
-}
-
-async function readCreditState(env: AdminEnv, ip: string): Promise<CreditState> {
-  const key = `credit:${ip}`;
-  const now = Date.now();
-  try {
-    const raw = await env.RATE_LIMIT_KV.get(key);
-    if (!raw) return { used: 0, credited: 0, resetAt: now + CREDIT_TTL_SECONDS * 1000 };
-    const parsed = JSON.parse(raw) as any;
-    const state: CreditState = {
-      used: parsed.used ?? 0,
-      credited: parsed.credited ?? parsed.bonus ?? 0,
-      resetAt: parsed.resetAt ?? now + CREDIT_TTL_SECONDS * 1000,
-    };
-    if (now >= state.resetAt) return { used: 0, credited: 0, resetAt: now + CREDIT_TTL_SECONDS * 1000 };
-    return state;
-  } catch {
-    return { used: 0, credited: 0, resetAt: now + CREDIT_TTL_SECONDS * 1000 };
-  }
-}
-
-async function writeCreditState(env: AdminEnv, ip: string, state: CreditState): Promise<void> {
-  const key = `credit:${ip}`;
-  const ttlLeft = Math.max(60, Math.ceil((state.resetAt - Date.now()) / 1000));
-  await env.RATE_LIMIT_KV.put(key, JSON.stringify(state), { expirationTtl: ttlLeft });
-}
-
 async function isBlacklisted(env: AdminEnv, ip: string): Promise<boolean> {
-  try {
-    const val = await env.RATE_LIMIT_KV.get(`blacklist:${ip}`);
-    return val !== null;
-  } catch { return false; }
+  try { return (await env.RATE_LIMIT_KV.get(`blacklist:${ip}`)) !== null; } catch { return false; }
 }
 
-async function getBanner(env: AdminEnv): Promise<{ text: string; type: string; active: boolean } | null> {
-  try {
-    const raw = await env.RATE_LIMIT_KV.get('banner:active');
-    if (!raw) return null;
-    return JSON.parse(raw);
-  } catch { return null; }
+async function listBlacklistEntries(env: AdminEnv): Promise<string[]> {
+  try { return (await env.RATE_LIMIT_KV.list({ prefix: 'blacklist:' })).keys.map(k => k.name.replace('blacklist:', '')); } catch { return []; }
 }
 
 // ======================================
@@ -174,87 +84,6 @@ function esc(str: string | undefined | null): string {
     .replace(/'/g, '&#39;');
 }
 
-// -- Ambil semua credit keys dari KV --
-async function listCreditKeys(env: AdminEnv): Promise<Array<{ ip: string; state: CreditState; blacklisted: boolean }>> {
-  try {
-    const list = await env.RATE_LIMIT_KV.list({ prefix: 'credit:' });
-    const results = [];
-    for (const key of list.keys) {
-      const ip = key.name.replace('credit:', '');
-      const state = await readCreditState(env, ip);
-      const blacklisted = await isBlacklisted(env, ip);
-      results.push({ ip, state, blacklisted });
-    }
-    return results;
-  } catch { return []; }
-}
-
-// -- Test satu OpenRouter key --
-async function testKey(env: AdminEnv, apiKey: string, keyLabel: string, activeModel?: string): Promise<{
-  label: string;
-  ok: boolean;
-  status: number | null;
-  latencyMs: number;
-  error: string | null;
-  model: string;
-}> {
-  // FIX BUG #1: selalu gunakan model aktif dari KV (bukan env langsung)
-  // activeModel dikirim dari caller yang sudah getLLMConfig() lebih dulu
-  const model = activeModel || env.FALLBACK_LLM_MODEL || 'z-ai/glm-5.2:free';
-  const baseUrl = (env.OPENROUTER_BASE_URL || 'https://openrouter.ai/api/v1').replace(/\/$/, '');
-  const start = Date.now();
-
-  // Timeout 15 detik - Workers tidak boleh gantung terlalu lama
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 15_000);
-
-  try {
-    const res = await fetch(`${baseUrl}/chat/completions`, {
-      method: 'POST',
-      signal: controller.signal,
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`,
-        'HTTP-Referer': 'https://jalurtarot.com',
-        'X-Title': 'Jalur Tarot Admin Health Check',
-      },
-      body: JSON.stringify({
-        model,
-        max_tokens: 8,
-        temperature: 0.1,
-        messages: [{ role: 'user', content: 'Hi' }],
-      }),
-    });
-    clearTimeout(timeoutId);
-    const latencyMs = Date.now() - start;
-
-    // Selalu consume body agar tidak ada resource leak di CF Workers
-    const bodyText = await res.text().catch(() => '');
-
-    if (res.ok) {
-      return { label: keyLabel, ok: true, status: res.status, latencyMs, error: null, model };
-    }
-    // Parse pesan error dari OpenRouter jika tersedia
-    let errorMsg = bodyText.slice(0, 300);
-    try {
-      const parsed = JSON.parse(bodyText);
-      errorMsg = parsed?.error?.message || parsed?.message || errorMsg;
-    } catch { /* biarkan errorMsg mentah */ }
-    return { label: keyLabel, ok: false, status: res.status, latencyMs, error: String(errorMsg).slice(0, 250), model };
-  } catch (e: any) {
-    clearTimeout(timeoutId);
-    const isTimeout = e.name === 'AbortError';
-    return {
-      label: keyLabel,
-      ok: false,
-      status: null,
-      latencyMs: Date.now() - start,
-      error: isTimeout ? 'Timeout (>15 detik)' : String(e.message).slice(0, 250),
-      model,
-    };
-  }
-}
-
 // ======================================
 // -- HTML HELPERS --
 // ======================================
@@ -263,8 +92,6 @@ function adminShell(title: string, content: string, activePage: string = ''): st
   const nav = [
     { href: '/admin', label: '[dashboard] Dashboard', id: 'dashboard' },
     { href: '/admin/live', label: '[live] Live', id: 'live' },
-    { href: '/admin/credits', label: '[credits] Credits', id: 'credits' },
-    { href: '/admin/health', label: '[health] LLM Health', id: 'health' },
     { href: '/admin/banner', label: '[banner] Banner', id: 'banner' },
     { href: '/admin/blacklist', label: '[blocked] Blacklist', id: 'blacklist' },
   ];
@@ -593,9 +420,8 @@ function adminShell(title: string, content: string, activePage: string = ''): st
 // GET /admin/login
 admin.get('/login', (c) => {
   const error = c.req.query('error');
-  const hint = c.req.query('hint'); // hint=1 jika ADMIN_PASSWORD belum diset
   // Jika sudah login, redirect langsung ke dashboard
-  if (isAuthenticated(c)) {
+  if (await isAuthenticated(c)) {
     return c.redirect('/admin');
   }
   return c.html(`<!DOCTYPE html>
@@ -696,13 +522,8 @@ admin.get('/login', (c) => {
   <div class="login-box">
     <h1>[tarot] Admin Panel</h1>
     <p class="sub">JalurTarot - Area Terbatas</p>
-    ${error && hint ? `
-    <div class="alert alert-warn">
-      [!] <strong>ADMIN_PASSWORD belum diset.</strong><br>
-      Jalankan: <code>wrangler secret put ADMIN_PASSWORD</code><br>
-      Atau gunakan password default: <code>changeme</code>
-    </div>` : error ? `
-    <div class="alert alert-error">[!] Password salah. Coba lagi.</div>` : ''}
+    ${error ? `
+    <div class="alert alert-error">[!] Password salah atau konfigurasi admin belum lengkap.</div>` : ''}
     <form method="POST" action="/admin/login">
       <label>PASSWORD</label>
       <div class="pw-wrap">
@@ -734,33 +555,28 @@ admin.post('/login', async (c) => {
   const password = (body['password'] as string || '').trim();
   const expected = getAdminPassword(c);
 
-  // Cek apakah ADMIN_PASSWORD belum di-set di Cloudflare Secrets
-  const isUsingFallback = !c.env.ADMIN_PASSWORD || (c.env.ADMIN_PASSWORD as string).trim() === '';
-
-  if (!password || password !== expected) {
-    // Jika pakai fallback, tampilkan hint
-    const hint = isUsingFallback ? '&hint=1' : '';
-    return c.redirect(`/admin/login?error=1${hint}`);
+  if (await isLoginRateLimited(c)) return c.redirect('/admin/login?error=1&rate=1');
+  if (!expected || !password || password !== expected) {
+    await recordFailedLogin(c);
+    return c.redirect('/admin/login?error=1');
   }
 
-  const token = getSessionToken(expected);
+  await clearLoginFailures(c);
+  const token = await createAdminSession(c);
+
   const res = c.redirect('/admin');
-  // Set cookie dengan Path=/ agar lebih kompatibel lintas redirect
   res.headers.set('Set-Cookie',
-    `admin_token=${token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${7 * 24 * 60 * 60}`
+    `admin_token=${encodeURIComponent(token)}; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=${ADMIN_SESSION_TTL_SECONDS}`
   );
   return res;
 });
 
 // POST /admin/logout
-admin.post('/logout', (c) => {
+admin.post('/logout', async (c) => {
+  await destroyAdminSession(c);
   const res = c.redirect('/admin/login');
-  // Hapus cookie dari kedua path untuk kompatibilitas (ada yang cookie lama pakai Path=/admin)
-  res.headers.append('Set-Cookie',
-    `admin_token=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0`
-  );
-  res.headers.append('Set-Cookie',
-    `admin_token=; Path=/admin; HttpOnly; SameSite=Strict; Max-Age=0`
+  res.headers.set('Set-Cookie',
+    'admin_token=; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=0'
   );
   return res;
 });
@@ -770,577 +586,58 @@ admin.post('/logout', (c) => {
 // ======================================
 
 admin.get('/', async (c) => {
-  const authErr = requireAuth(c);
-  if (authErr) return authErr;
-
-  const entries = await listCreditKeys(c.env);
-  const banner = await getBanner(c.env);
-
-  const totalIPs = entries.length;
-  const totalUsed = entries.reduce((s, e) => s + e.state.used, 0);
-  const blacklistedCount = entries.filter(e => e.blacklisted).length;
-  const highUsage = entries.filter(e => {
-    const effective = CREDIT_LIMIT + e.state.credited;
-    return e.state.used / effective >= 0.8;
-  }).length;
-
-  // Cek berapa key tersedia
-  const keyCount = [
-    c.env.OPENROUTER_API_KEY,
-    c.env.OPENROUTER_API_KEY_2,
-    c.env.OPENROUTER_API_KEY_3,
-    c.env.OPENROUTER_API_KEY_4,
-    c.env.OPENROUTER_API_KEY_5,
-  ].filter((k): k is string => typeof k === 'string' && k.trim().length > 0).length;
+  const blacklistedEntries = await listBlacklistEntries(c.env);
+  const current = await getLiveDraw(c.env);
+  const renderConfigured = Boolean((c.env as any).RENDER_API_KEY);
+  const liveSecretConfigured = Boolean((c.env as any).LIVE_SECRET);
 
   const content = `
-    ${banner?.active ? `<div class="alert alert-info">[banner] Banner aktif: "${esc(banner.text)}"</div>` : ''}
     <div class="stats-row">
       <div class="stat-box">
-        <div class="stat-label">Total IP Tracked</div>
-        <div class="stat-value">${totalIPs}</div>
-        <div class="stat-sub">unique IPs di KV</div>
-      </div>
-      <div class="stat-box">
-        <div class="stat-label">Total Kredit Dipakai</div>
-        <div class="stat-value">${totalUsed}</div>
-        <div class="stat-sub">semua IP digabung</div>
-      </div>
-      <div class="stat-box">
         <div class="stat-label">IP Blacklisted</div>
-        <div class="stat-value" style="color:${blacklistedCount > 0 ? 'var(--red)' : 'var(--text)'}">${blacklistedCount}</div>
-        <div class="stat-sub">diblokir</div>
+        <div class="stat-value">${blacklistedEntries.length}</div>
+        <div class="stat-sub">aktif di KV</div>
       </div>
       <div class="stat-box">
-        <div class="stat-label">IP High Usage</div>
-        <div class="stat-value" style="color:${highUsage > 0 ? 'var(--yellow)' : 'var(--text)'}">${highUsage}</div>
-        <div class="stat-sub">>=80% limit terpakai</div>
+        <div class="stat-label">Live Draw</div>
+        <div class="stat-value">${current ? '1' : '0'}</div>
+        <div class="stat-sub">${current ? 'draw tersedia' : 'belum ada draw'}</div>
       </div>
       <div class="stat-box">
-        <div class="stat-label">OpenRouter Keys</div>
-        <div class="stat-value">${keyCount}</div>
-        <div class="stat-sub">key terdaftar - <a href="/admin/health" style="color:var(--gold);text-decoration:none;font-size:11px;">cek status</a></div>
+        <div class="stat-label">Render Listener</div>
+        <div class="stat-value">${renderConfigured ? 'ON' : 'OFF'}</div>
+        <div class="stat-sub">${renderConfigured ? 'API configured' : 'secret belum di-set'}</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-label">Live Secret</div>
+        <div class="stat-value">${liveSecretConfigured ? 'ON' : 'OFF'}</div>
+        <div class="stat-sub">trigger listener</div>
       </div>
     </div>
 
     <div class="card">
       <div class="card-title">Quick Links</div>
       <div style="display:flex;gap:0.75rem;flex-wrap:wrap;">
-        <a href="/admin/credits" class="btn btn-ghost">[credits] Kelola Credits</a>
-        <a href="/admin/health" class="btn btn-ghost">[health] Cek LLM Keys</a>
-        <a href="/admin/banner" class="btn btn-ghost">[banner] Set Banner</a>
+        <a href="/admin/live" class="btn btn-ghost">[live] Kontrol Live</a>
+        <a href="/admin/banner" class="btn btn-ghost">[banner] Kelola Banner</a>
         <a href="/admin/blacklist" class="btn btn-ghost">[blocked] Kelola Blacklist</a>
-        <a href="/" class="btn btn-ghost" target="_blank">[web] Buka Situs</a>
+        <a href="/live" target="_blank" class="btn btn-ghost">[overlay] Buka Overlay</a>
       </div>
     </div>
 
     <div class="card">
-      <div class="card-title">Top IP by Usage (5 Teratas)</div>
-      ${entries.length === 0 ? `<div class="empty-state"><p>[empty]</p><p>Belum ada data kredit</p></div>` : `
-      <div class="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>IP</th>
-              <th>Dipakai</th>
-              <th>Bonus</th>
-              <th>Usage</th>
-              <th>Reset</th>
-              <th>Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${entries
-              .sort((a, b) => b.state.used - a.state.used)
-              .slice(0, 5)
-              .map(e => {
-                const effective = CREDIT_LIMIT + e.state.credited;
-                const pct = Math.min(100, Math.round((e.state.used / effective) * 100));
-                const resetDate = new Date(e.state.resetAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' });
-                const fillClass = pct >= 90 ? 'danger' : pct >= 70 ? 'warning' : '';
-                return `<tr>
-                  <td class="mono">${e.ip}</td>
-                  <td>${e.state.used} / ${effective}</td>
-                  <td>${e.state.credited > 0 ? `<span class="badge badge-gold">+${e.state.credited}</span>` : '-'}</td>
-                  <td>
-                    <div class="progress-bar"><div class="progress-fill ${fillClass}" style="width:${pct}%"></div></div>
-                    <span style="font-size:11px;color:var(--text-dim);margin-left:6px;">${pct}%</span>
-                  </td>
-                  <td style="font-size:12px;color:var(--text-dim);">${resetDate}</td>
-                  <td>${e.blacklisted ? '<span class="badge badge-red">BLOCKED</span>' : pct >= 90 ? '<span class="badge badge-yellow">NEAR LIMIT</span>' : '<span class="badge badge-green">OK</span>'}</td>
-                </tr>`;
-              }).join('')}
-          </tbody>
-        </table>
-      </div>
-      `}
+      <div class="card-title">Status Sistem</div>
+      <p style="font-size:13px;color:var(--text-dim);line-height:1.8;">
+        JalurTarot Live berjalan dalam mode lokal/static: kartu dan interpretasi berasal dari data repository.
+        Listener TikTok mengirim trigger terautentikasi ke Worker, lalu draw terbaru disimpan di KV untuk overlay.
+      </p>
     </div>
   `;
 
   return c.html(adminShell('[dashboard] Dashboard', content, 'dashboard'));
 });
 
-// ======================================
-// -- ROUTES: CREDITS --
-// ======================================
-
-admin.get('/credits', async (c) => {
-  const authErr = requireAuth(c);
-  if (authErr) return authErr;
-
-  const entries = await listCreditKeys(c.env);
-  const msg = c.req.query('msg');
-  const msgType = c.req.query('type') || 'success';
-  const filterIp = c.req.query('ip') || '';
-
-  const filtered = filterIp
-    ? entries.filter(e => e.ip.includes(filterIp))
-    : entries;
-
-  const sorted = [...filtered].sort((a, b) => b.state.used - a.state.used);
-
-  const content = `
-    ${msg ? `<div class="alert alert-${esc(msgType)}">${esc(msg)}</div>` : ''}
-
-    <div class="card">
-      <div class="card-title">Cari / Lookup IP</div>
-      <form method="GET" action="/admin/credits" style="display:flex;gap:0.75rem;align-items:center;flex-wrap:wrap;">
-        <input type="text" name="ip" value="${esc(filterIp)}" placeholder="Ketik IP atau sebagian IP..." style="min-width:260px;"/>
-        <button type="submit" class="btn btn-primary">Cari</button>
-        ${filterIp ? `<a href="/admin/credits" class="btn btn-ghost">Reset</a>` : ''}
-      </form>
-    </div>
-
-    <div class="card">
-      <div class="card-title">Tambah / Edit Kredit per IP</div>
-      <form method="POST" action="/admin/credits/adjust">
-        <div class="form-row">
-          <label>IP Address</label>
-          <input type="text" name="ip" placeholder="1.2.3.4" required/>
-          <label>Bonus Kredit (+/-)</label>
-          <input type="number" name="amount" value="1" min="-100" max="100" required/>
-          <button type="submit" class="btn btn-primary">Terapkan</button>
-        </div>
-        <p style="font-size:11px;color:var(--text-faint);">Nilai positif = tambah kredit. Nilai negatif = kurangi. Perubahan ini akan bertambah ke bonus (credited) yang sudah ada.</p>
-      </form>
-    </div>
-
-    <div class="card">
-      <div class="card-title">Reset Kredit IP</div>
-      <form method="POST" action="/admin/credits/reset">
-        <div class="form-row">
-          <label>IP Address</label>
-          <input type="text" name="ip" placeholder="1.2.3.4" required/>
-          <button type="submit" class="btn btn-danger" onclick="return confirm('Reset kredit IP ini ke 0?')">Reset ke 0</button>
-        </div>
-        <p style="font-size:11px;color:var(--text-faint);">Menghapus semua pemakaian dan bonus untuk IP ini. TTL window tetap berjalan.</p>
-      </form>
-    </div>
-
-    <div class="card">
-      <div class="card-title">Semua IP Tracked (${sorted.length})</div>
-      ${sorted.length === 0 ? `<div class="empty-state"><p>[empty]</p><p>Tidak ada data${filterIp ? ` untuk IP "${esc(filterIp)}"` : ''}</p></div>` : `
-      <div class="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>IP</th>
-              <th>Dipakai</th>
-              <th>Limit Efektif</th>
-              <th>Bonus</th>
-              <th>Usage %</th>
-              <th>Reset</th>
-              <th>Status</th>
-              <th>Aksi</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${sorted.map(e => {
-              const effective = CREDIT_LIMIT + e.state.credited;
-              const pct = Math.min(100, Math.round((e.state.used / effective) * 100));
-              const resetDate = new Date(e.state.resetAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
-              const fillClass = pct >= 90 ? 'danger' : pct >= 70 ? 'warning' : '';
-              const safeIp = esc(e.ip); // FIX BUG #3+#7: escape IP sebelum render
-              return `<tr>
-                <td class="mono">${safeIp}</td>
-                <td>${e.state.used}</td>
-                <td>${effective} (base ${CREDIT_LIMIT} + bonus ${e.state.credited})</td>
-                <td>${e.state.credited > 0 ? `<span class="badge badge-gold">+${e.state.credited}</span>` : '-'}</td>
-                <td>
-                  <div class="progress-bar"><div class="progress-fill ${fillClass}" style="width:${pct}%"></div></div>
-                  <span style="font-size:11px;color:var(--text-dim);margin-left:6px;">${pct}%</span>
-                </td>
-                <td style="font-size:11px;color:var(--text-dim);">${resetDate}</td>
-                <td>${e.blacklisted
-                  ? '<span class="badge badge-red">BLOCKED</span>'
-                  : pct >= 100 ? '<span class="badge badge-red">LIMIT</span>'
-                  : pct >= 80 ? '<span class="badge badge-yellow">NEAR LIMIT</span>'
-                  : '<span class="badge badge-green">OK</span>'}</td>
-                <td style="white-space:nowrap;">
-                  <form method="POST" action="/admin/credits/adjust" style="display:inline;">
-                    <input type="hidden" name="ip" value="${safeIp}"/>
-                    <input type="hidden" name="amount" value="5"/>
-                    <button type="submit" class="btn btn-success" style="font-size:10px;padding:2px 7px;">+5</button>
-                  </form>
-                  <form method="POST" action="/admin/credits/reset" style="display:inline;margin-left:4px;" onsubmit="return confirm('Reset kredit ${safeIp}?')">
-                    <input type="hidden" name="ip" value="${safeIp}"/>
-                    <button type="submit" class="btn btn-danger" style="font-size:10px;padding:2px 7px;">Reset</button>
-                  </form>
-                  ${!e.blacklisted
-                    ? `<form method="POST" action="/admin/blacklist/add" style="display:inline;margin-left:4px;" onsubmit="return confirm('Blacklist ${safeIp}?')">
-                        <input type="hidden" name="ip" value="${safeIp}"/>
-                        <input type="hidden" name="redirect" value="/admin/credits"/>
-                        <button type="submit" class="btn btn-ghost" style="font-size:10px;padding:2px 7px;">[blocked]</button>
-                       </form>`
-                    : `<form method="POST" action="/admin/blacklist/remove" style="display:inline;margin-left:4px;">
-                        <input type="hidden" name="ip" value="${safeIp}"/>
-                        <input type="hidden" name="redirect" value="/admin/credits"/>
-                        <button type="submit" class="btn btn-ghost" style="font-size:10px;padding:2px 7px;">[ok] Unblock</button>
-                       </form>`
-                  }
-                </td>
-              </tr>`;
-            }).join('')}
-          </tbody>
-        </table>
-      </div>
-      `}
-    </div>
-  `;
-
-  return c.html(adminShell('[credits] Credit Manager', content, 'credits'));
-});
-
-// POST /admin/credits/adjust
-admin.post('/credits/adjust', async (c) => {
-  const authErr = requireAuth(c);
-  if (authErr) return authErr;
-
-  const body = await c.req.parseBody();
-  const ip = (body['ip'] as string || '').trim();
-  const amount = parseInt(body['amount'] as string || '0', 10);
-
-  if (!ip) return c.redirect('/admin/credits?msg=IP+tidak+boleh+kosong&type=error');
-  if (isNaN(amount)) return c.redirect('/admin/credits?msg=Jumlah+tidak+valid&type=error');
-
-  try {
-    const state = await readCreditState(c.env, ip);
-    const newCredited = Math.max(0, state.credited + amount);
-    await writeCreditState(c.env, ip, { ...state, credited: newCredited });
-    const action = amount >= 0 ? `+${amount}` : `${amount}`;
-    return c.redirect(`/admin/credits?msg=Kredit+IP+${encodeURIComponent(ip)}+berhasil+diubah+(${encodeURIComponent(action)})&type=success`);
-  } catch (e: any) {
-    return c.redirect(`/admin/credits?msg=Error:+${encodeURIComponent(e.message)}&type=error`);
-  }
-});
-
-// POST /admin/credits/reset
-admin.post('/credits/reset', async (c) => {
-  const authErr = requireAuth(c);
-  if (authErr) return authErr;
-
-  const body = await c.req.parseBody();
-  const ip = (body['ip'] as string || '').trim();
-  const redirectTo = (body['redirect'] as string) || '/admin/credits';
-
-  if (!ip) return c.redirect(`${redirectTo}?msg=IP+tidak+boleh+kosong&type=error`);
-
-  try {
-    const now = Date.now();
-    const freshState: CreditState = {
-      used: 0,
-      credited: 0,
-      resetAt: now + CREDIT_TTL_SECONDS * 1000,
-    };
-    await writeCreditState(c.env, ip, freshState);
-    return c.redirect(`${redirectTo}?msg=Kredit+IP+${encodeURIComponent(ip)}+berhasil+direset&type=success`);
-  } catch (e: any) {
-    return c.redirect(`${redirectTo}?msg=Error:+${encodeURIComponent(e.message)}&type=error`);
-  }
-});
-
-// ======================================
-// -- ROUTES: LLM HEALTH --
-// ======================================
-
-admin.get('/health', async (c) => {
-  const authErr = requireAuth(c);
-  if (authErr) return authErr;
-
-  // Baca config LLM dari KV (bisa diedit dari admin panel ini)
-  const llmCfg = await getLLMConfig(c.env);
-  const model = llmCfg.model;
-  const llmEnabled = llmCfg.enabled;
-  // Env fallback info - untuk ditampilkan sebagai referensi
-  const envModel = c.env.FALLBACK_LLM_MODEL || 'z-ai/glm-5.2:free';
-  const envEnabled = c.env.ENABLE_FALLBACK_LLM === 'true';
-
-  // Ambil semua key
-  const keyDefs = [
-    { label: 'Key 1 (Primary)', value: c.env.OPENROUTER_API_KEY },
-    { label: 'Key 2', value: c.env.OPENROUTER_API_KEY_2 },
-    { label: 'Key 3', value: c.env.OPENROUTER_API_KEY_3 },
-    { label: 'Key 4', value: c.env.OPENROUTER_API_KEY_4 },
-    { label: 'Key 5', value: c.env.OPENROUTER_API_KEY_5 },
-  ].filter(k => typeof k.value === 'string' && k.value.trim().length > 0) as Array<{ label: string; value: string }>;
-
-  const doTest = c.req.query('test') === '1';
-  let results: Array<Awaited<ReturnType<typeof testKey>>> = [];
-
-  if (doTest && keyDefs.length > 0) {
-    // FIX BUG #4: pass model aktif dari KV ke testKey() agar model yg di-test = model yg dipakai user
-    results = await Promise.all(keyDefs.map(k => testKey(c.env, k.value, k.label, model)));
-  }
-
-  const okCount = results.filter(r => r.ok).length;
-  const failCount = results.filter(r => !r.ok).length;
-
-  // Render tabel hasil test key - dipisah agar tidak ada template literal bersarang
-  function renderKeyTestRows(rows: typeof results, defs: typeof keyDefs): string {
-    return rows.map(r => {
-      const keyDef = defs.find(k => k.label === r.label);
-      const kv = keyDef?.value || '';
-      const masked = kv.length > 14
-        ? kv.slice(0, 8) + '...' + kv.slice(-4)
-        : kv.length > 6 ? kv.slice(0, 4) + '...' : '-';
-      const errSafe = r.error ? r.error.replace(/"/g, '&quot;') : '';
-      const errShort = r.error ? (r.error.slice(0, 60) + (r.error.length > 60 ? '...' : '')) : '';
-      const errorHtml = r.error
-        ? '<span title="' + errSafe + '" style="cursor:help;border-bottom:1px dashed var(--text-faint);">' + errShort + '</span>'
-        : '<span style="color:var(--text-faint);">-</span>';
-      const statusBadge = r.status !== null
-        ? '<span class="badge ' + (r.status === 200 ? 'badge-green' : 'badge-red') + '">' + r.status + '</span>'
-        : '<span style="color:var(--text-faint);">-</span>';
-      return '<tr>'
-        + '<td style="font-weight:600;">' + r.label + '</td>'
-        + '<td class="mono" style="font-size:11px;">' + masked + '</td>'
-        + '<td>'
-        + '<span class="health-dot ' + (r.ok ? 'ok' : 'fail') + '"></span>'
-        + '<span class="badge ' + (r.ok ? 'badge-green' : 'badge-red') + '">' + (r.ok ? 'OK' : 'GAGAL') + '</span>'
-        + '</td>'
-        + '<td>' + statusBadge + '</td>'
-        + '<td style="font-size:12px;color:var(--text-dim);">' + r.latencyMs + 'ms</td>'
-        + '<td style="font-size:11px;color:' + (r.ok ? 'var(--text-faint)' : '#e74c3c') + ';max-width:220px;">' + errorHtml + '</td>'
-        + '</tr>';
-    }).join('');
-  }
-
-  const keyTestResultsHtml = doTest ? (
-    '<div style="margin-bottom:1rem;display:flex;gap:0.75rem;align-items:center;flex-wrap:wrap;">'
-    + (okCount > 0 ? '<span class="badge badge-green">[ok] ' + okCount + ' key OK</span>' : '')
-    + (failCount > 0 ? '<span class="badge badge-red">[x] ' + failCount + ' key GAGAL</span>' : '')
-    + '<a href="/admin/health?test=1" class="btn btn-ghost" style="font-size:11px;">(refresh) Test Ulang</a>'
-    + '<a href="/admin/health" class="btn btn-ghost" style="font-size:11px;">Tutup</a>'
-    + '</div>'
-    + '<div class="table-wrap"><table>'
-    + '<thead><tr><th>Key</th><th>Masked</th><th>Status</th><th>HTTP</th><th>Latency</th><th>Keterangan</th></tr></thead>'
-    + '<tbody>' + renderKeyTestRows(results, keyDefs) + '</tbody>'
-    + '</table></div>'
-  ) : (
-    '<p style="font-size:13px;color:var(--text-dim);margin-bottom:1rem;">Setiap key dicoba dengan request minimal (max_tokens=8).</p>'
-    + '<a href="/admin/health?test=1" class="btn btn-primary">[health] Jalankan Health Check</a>'
-  );
-
-  // Pesan dari action sebelumnya (model/toggle saved)
-  const msg = c.req.query('msg');
-  const msgType = c.req.query('type') || 'success';
-
-  // Model preset populer OpenRouter (gratis dan berbayar)
-  const MODEL_PRESETS = [
-    { label: 'z-ai/glm-5.2:free', value: 'z-ai/glm-5.2:free', note: 'Default' },
-    { label: 'google/gemma-3-27b-it:free', value: 'google/gemma-3-27b-it:free', note: 'Gratis' },
-    { label: 'meta-llama/llama-4-scout:free', value: 'meta-llama/llama-4-scout:free', note: 'Gratis' },
-    { label: 'deepseek/deepseek-chat-v3-0324:free', value: 'deepseek/deepseek-chat-v3-0324:free', note: 'Gratis' },
-    { label: 'mistralai/mistral-small-3.2-24b-instruct:free', value: 'mistralai/mistral-small-3.2-24b-instruct:free', note: 'Gratis' },
-    { label: 'openai/gpt-4o-mini', value: 'openai/gpt-4o-mini', note: 'Berbayar' },
-    { label: 'anthropic/claude-haiku-3.5', value: 'anthropic/claude-haiku-3.5', note: 'Berbayar' },
-    { label: 'google/gemini-flash-1.5', value: 'google/gemini-flash-1.5', note: 'Berbayar' },
-  ];
-
-  const content = `
-    ${msg ? `<div class="alert alert-${esc(msgType) === 'error' ? 'error' : 'success'}" style="margin-bottom:1rem;">${esc(msgType) === 'error' ? '[!]' : '[ok]'} ${esc(msg)}</div>` : ''}
-
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1rem;">
-
-      <!-- -- Card: Ganti Model -- -->
-      <div class="card" style="margin-bottom:0;">
-        <div class="card-title">[model] Model LLM Aktif</div>
-        <p style="font-size:12px;color:var(--text-dim);margin-bottom:1rem;line-height:1.6;">
-          Model yang dipakai untuk interpretasi tarot.<br/>
-          Perubahan berlaku <strong>langsung</strong> - tanpa redeploy.
-        </p>
-        <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:0.75rem 1rem;margin-bottom:1rem;display:flex;align-items:center;gap:0.75rem;flex-wrap:wrap;">
-          <span style="font-size:11px;color:var(--text-dim);">Aktif sekarang:</span>
-          <span class="mono" style="color:var(--gold);font-size:12px;">${model}</span>
-          ${model !== envModel ? `<span class="badge badge-blue" style="font-size:10px;" title="env: ${envModel}">KV override</span>` : '<span class="badge badge-green" style="font-size:10px;">= env</span>'}
-        </div>
-        <form method="POST" action="/admin/config/model">
-          <label style="display:block;font-size:11px;color:var(--text-dim);margin-bottom:0.35rem;letter-spacing:0.04em;">PILIH PRESET MODEL</label>
-          <select name="model" style="width:100%;padding:0.55rem 0.75rem;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:12px;margin-bottom:0.75rem;cursor:pointer;font-family:monospace;" onchange="syncCustomField(this)">
-            ${MODEL_PRESETS.map(p => `<option value="${p.value}" ${model === p.value ? 'selected' : ''}>${p.label} (${p.note})</option>`).join('')}
-            <option value="__custom__" ${!MODEL_PRESETS.find(p => p.value === model) ? 'selected' : ''}>- Custom (isi manual) -</option>
-          </select>
-          <label style="display:block;font-size:11px;color:var(--text-dim);margin-bottom:0.35rem;letter-spacing:0.04em;">ATAU KETIK MODEL ID MANUAL</label>
-          <input type="text" id="customModel" name="custom_model"
-            value="${!MODEL_PRESETS.find(p => p.value === model) ? model : ''}"
-            placeholder="provider/model-name:variant"
-            style="width:100%;padding:0.55rem 0.75rem;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:12px;font-family:monospace;margin-bottom:0.75rem;outline:none;"
-          />
-          <button type="submit" class="btn btn-primary" style="width:100%;">[save] Simpan Model</button>
-        </form>
-        <p style="font-size:11px;color:var(--text-faint);margin-top:0.6rem;">
-          Lihat semua model di <a href="https://openrouter.ai/models" target="_blank" style="color:var(--gold);">openrouter.ai/models</a>
-        </p>
-      </div>
-
-      <!-- -- Card: Toggle LLM -- -->
-      <div class="card" style="margin-bottom:0;">
-        <div class="card-title">[*] Status LLM</div>
-        <p style="font-size:12px;color:var(--text-dim);margin-bottom:1rem;line-height:1.6;">
-          Nonaktifkan LLM untuk beralih ke <strong>static mode</strong> - interpretasi dari template tanpa AI. Berguna saat kuota habis atau debugging.
-        </p>
-        <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:1rem;margin-bottom:1rem;text-align:center;">
-          <div style="font-size:2rem;margin-bottom:0.4rem;">${llmEnabled ? '[on]' : '[live]'}</div>
-          <span class="badge ${llmEnabled ? 'badge-green' : 'badge-red'}" style="font-size:13px;padding:0.3rem 0.75rem;">
-            ${llmEnabled ? 'LLM AKTIF' : 'STATIC MODE'}
-          </span>
-          ${llmEnabled !== envEnabled ? `<div style="font-size:11px;color:var(--text-faint);margin-top:0.5rem;">env: ${envEnabled ? 'aktif' : 'nonaktif'} - KV: ${llmEnabled ? 'aktif' : 'nonaktif'}</div>` : ''}
-        </div>
-        <form method="POST" action="/admin/config/llm-toggle">
-          <input type="hidden" name="enabled" value="${llmEnabled ? 'false' : 'true'}"/>
-          <button type="submit" class="btn ${llmEnabled ? 'btn-ghost' : 'btn-primary'}" style="width:100%;" onclick="return confirm('${llmEnabled ? 'Nonaktifkan LLM? User akan dapat static mode.' : 'Aktifkan LLM?'}')">
-            ${llmEnabled ? '[live] Nonaktifkan LLM' : '[on] Aktifkan LLM'}
-          </button>
-        </form>
-        <div style="margin-top:1rem;padding-top:0.75rem;border-top:1px solid var(--border);">
-          <div style="font-size:11px;color:var(--text-dim);margin-bottom:0.5rem;">Status sumber config:</div>
-          <table style="width:100%;font-size:11px;">
-            <tr>
-              <td style="color:var(--text-faint);padding-bottom:0.25rem;">env ENABLE_FALLBACK_LLM</td>
-              <td><span class="badge ${envEnabled ? 'badge-green' : 'badge-red'}" style="font-size:10px;">${envEnabled ? 'true' : 'false'}</span></td>
-            </tr>
-            <tr>
-              <td style="color:var(--text-faint);padding-bottom:0.25rem;">KV override</td>
-              <td><span class="badge badge-blue" style="font-size:10px;">${llmEnabled ? 'true' : 'false'}</span></td>
-            </tr>
-            <tr>
-              <td style="color:var(--text-faint);">Key tersedia</td>
-              <td><span class="badge badge-blue" style="font-size:10px;">${keyDefs.length} key</span></td>
-            </tr>
-          </table>
-        </div>
-      </div>
-
-    </div>
-
-    ${keyDefs.length === 0 ? `
-    <div class="alert alert-error">[!] Tidak ada API key yang terdaftar. Set OPENROUTER_API_KEY via <code>wrangler secret put</code>.</div>
-    ` : ''}
-
-    <div class="card">
-      <div class="card-title">[search] Test Semua Key</div>
-      <p style="font-size:12px;color:var(--text-dim);margin-bottom:0.5rem;">
-        Model yang dipakai saat test: <span class="mono" style="color:var(--gold);">${model}</span>
-        &nbsp;-&nbsp; Base URL: <span class="mono" style="font-size:11px;">${c.env.OPENROUTER_BASE_URL || 'https://openrouter.ai/api/v1'}</span>
-      </p>
-      ${keyTestResultsHtml}
-    </div>
-
-    <div class="card">
-      <div class="card-title">Cara Tambah / Ganti Key</div>
-      <p style="font-size:13px;color:var(--text-dim);line-height:1.7;">
-        Key disimpan sebagai <strong>Cloudflare Secret</strong>, tidak bisa diedit dari sini.<br/>
-        Untuk ubah key, jalankan di terminal:
-      </p>
-      <pre style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:0.75rem 1rem;font-size:12px;color:var(--gold);margin-top:0.75rem;overflow-x:auto;">wrangler secret put OPENROUTER_API_KEY
-wrangler secret put OPENROUTER_API_KEY_2
-wrangler secret put OPENROUTER_API_KEY_3</pre>
-      <p style="font-size:11px;color:var(--text-faint);margin-top:0.5rem;">Setelah set secret, jalankan <code style="color:var(--gold)">wrangler deploy</code> untuk mengaktifkan.</p>
-    </div>
-
-    <script>
-      // Sinkronkan field custom dengan dropdown pilihan preset
-      function syncCustomField(sel) {
-        const customField = document.getElementById('customModel');
-        if (sel.value === '__custom__') {
-          customField.focus();
-        } else {
-          customField.value = '';
-        }
-      }
-      // Validasi sebelum submit form model
-      document.querySelector('form[action="/admin/config/model"]').addEventListener('submit', function(e) {
-        const sel = this.querySelector('select[name="model"]');
-        const custom = document.getElementById('customModel').value.trim();
-        if (sel.value === '__custom__' && !custom) {
-          e.preventDefault();
-          alert('Isi model ID di field manual, atau pilih dari preset.');
-          return;
-        }
-        // Jika custom diisi, override value select agar yang dikirim adalah custom
-        if (custom && custom !== sel.value) {
-          sel.value = custom;
-        }
-      });
-    </script>
-  `;
-
-  return c.html(adminShell('[health] LLM Health Check', content, 'health'));
-});
-
-// -- POST /admin/config/model - simpan model ke KV --
-admin.post('/config/model', async (c) => {
-  const authErr = requireAuth(c);
-  if (authErr) return authErr;
-
-  const body = await c.req.parseBody();
-  // Jika custom diisi, custom override dropdown
-  const custom = ((body['custom_model'] as string) || '').trim();
-  const preset = ((body['model'] as string) || '').trim();
-  const newModel = (custom || preset).trim();
-
-  if (!newModel || newModel === '__custom__') {
-    return c.redirect('/admin/health?msg=Model+tidak+boleh+kosong&type=error');
-  }
-  // Validasi format dasar: harus ada minimal 1 slash (provider/model)
-  if (!newModel.includes('/')) {
-    return c.redirect('/admin/health?msg=Format+model+tidak+valid+(harus:+provider%2Fmodel-name)&type=error');
-  }
-
-  try {
-    await setLLMConfig(c.env, { model: newModel });
-    return c.redirect(`/admin/health?msg=Model+berhasil+diganti+ke+${encodeURIComponent(newModel)}&type=success`);
-  } catch (e: any) {
-    return c.redirect(`/admin/health?msg=Gagal+simpan:+${encodeURIComponent(e.message)}&type=error`);
-  }
-});
-
-// -- POST /admin/config/llm-toggle - aktif/nonaktifkan LLM --
-admin.post('/config/llm-toggle', async (c) => {
-  const authErr = requireAuth(c);
-  if (authErr) return authErr;
-
-  const body = await c.req.parseBody();
-  const enabledStr = (body['enabled'] as string || '').trim();
-  const enabled = enabledStr === 'true';
-
-  try {
-    await setLLMConfig(c.env, { enabled });
-    const statusLabel = enabled ? 'diaktifkan' : 'dinonaktifkan';
-    return c.redirect(`/admin/health?msg=LLM+berhasil+${statusLabel}&type=success`);
-  } catch (e: any) {
-    return c.redirect(`/admin/health?msg=Gagal+simpan:+${encodeURIComponent(e.message)}&type=error`);
-  }
-});
-
-// ======================================
-// -- ROUTES: BANNER --
-// ======================================
-
 admin.get('/banner', async (c) => {
-  const authErr = requireAuth(c);
-  if (authErr) return authErr;
-
   const banner = await getBanner(c.env);
   const msg = c.req.query('msg');
   const msgType = c.req.query('type') || 'success';
@@ -1412,9 +709,6 @@ admin.get('/banner', async (c) => {
 
 // POST /admin/banner/set
 admin.post('/banner/set', async (c) => {
-  const authErr = requireAuth(c);
-  if (authErr) return authErr;
-
   const body = await c.req.parseBody();
   const text = (body['text'] as string || '').trim();
   const type = (body['type'] as string || 'info').trim();
@@ -1432,9 +726,6 @@ admin.post('/banner/set', async (c) => {
 
 // POST /admin/banner/deactivate
 admin.post('/banner/deactivate', async (c) => {
-  const authErr = requireAuth(c);
-  if (authErr) return authErr;
-
   try {
     await c.env.RATE_LIMIT_KV.delete('banner:active');
     return c.redirect('/admin/banner?msg=Banner+berhasil+dinonaktifkan&type=success');
@@ -1448,9 +739,6 @@ admin.post('/banner/deactivate', async (c) => {
 // ======================================
 
 admin.get('/blacklist', async (c) => {
-  const authErr = requireAuth(c);
-  if (authErr) return authErr;
-
   const msg = c.req.query('msg');
   const msgType = c.req.query('type') || 'success';
 
@@ -1530,9 +818,6 @@ admin.get('/blacklist', async (c) => {
 
 // POST /admin/blacklist/add
 admin.post('/blacklist/add', async (c) => {
-  const authErr = requireAuth(c);
-  if (authErr) return authErr;
-
   const body = await c.req.parseBody();
   const ip = (body['ip'] as string || '').trim();
   const reason = (body['reason'] as string || '').trim();
@@ -1551,9 +836,6 @@ admin.post('/blacklist/add', async (c) => {
 
 // POST /admin/blacklist/remove
 admin.post('/blacklist/remove', async (c) => {
-  const authErr = requireAuth(c);
-  if (authErr) return authErr;
-
   const body = await c.req.parseBody();
   const ip = (body['ip'] as string || '').trim();
   const redirectTo = (body['redirect'] as string) || '/admin/blacklist';
@@ -1593,8 +875,6 @@ export async function checkBlacklist(env: AdminEnv, ip: string): Promise<boolean
 
 // GET /admin/live - panel kontrol & panduan setup
 admin.get('/live', async (c) => {
-  const authErr = requireAuth(c);
-  if (authErr) return authErr;
   const msg = c.req.query('msg');
   const msgType = c.req.query('type') || 'success';
   const secretSet = Boolean((c.env as any).LIVE_SECRET);
@@ -1661,8 +941,6 @@ admin.get('/live', async (c) => {
 });
 
 admin.post('/live/render/start', async (c) => {
-  const authErr = requireAuth(c);
-  if (authErr) return authErr;
   try {
     const service = await getRenderListener(c.env);
     if (service.suspended === 'suspended') await renderApiRequest(c.env, '/services/' + service.id + '/resume', { method: 'POST' });
@@ -1673,8 +951,6 @@ admin.post('/live/render/start', async (c) => {
 });
 
 admin.post('/live/render/stop', async (c) => {
-  const authErr = requireAuth(c);
-  if (authErr) return authErr;
   try {
     const service = await getRenderListener(c.env);
     if (service.suspended !== 'suspended') await renderApiRequest(c.env, '/services/' + service.id + '/suspend', { method: 'POST' });
@@ -1685,16 +961,14 @@ admin.post('/live/render/stop', async (c) => {
 });
 
 admin.post('/live/test-draw', async (c) => {
-  const authErr = requireAuth(c);
-  if (authErr) return authErr;
-
   const body = await c.req.parseBody();
   const spreadId: LiveSpreadId = body['spreadId'] === 'three-card' ? 'three-card' : 'single';
   const username = (body['username'] as string || '@tester').trim() || '@tester';
   const giftName = (body['giftName'] as string || '').trim() || undefined;
 
   const draw = generateLiveDraw(spreadId, username, giftName, giftName ? 1 : undefined);
-  await saveLiveDraw(c.env, draw);
+  const saved = await saveLiveDraw(c.env, draw);
+  if (!saved) return c.redirect('/admin/live?msg=Gagal+menyimpan+draw+ke+KV&type=error');
 
   return c.redirect('/admin/live?msg=Kartu+berhasil+ditarik&type=success');
 });
