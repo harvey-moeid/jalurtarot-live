@@ -29,6 +29,16 @@ jobs:
       - name: TypeScript check
         run: npx tsc --noEmit
 
+  listener-tests:
+    name: Listener Logic Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Run listener tests
+        working-directory: tiktok-listener
+        run: node --test test/*.test.js
+
   deploy:
     name: Deploy to Cloudflare Workers
     runs-on: ubuntu-latest
