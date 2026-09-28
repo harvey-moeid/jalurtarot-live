@@ -4,7 +4,7 @@ import { getLLMConfig, setLLMConfig } from '../lib/config';
 import { generateLiveDraw, saveLiveDraw, getLiveDraw, type LiveSpreadId } from '../lib/live';
 
 import type { AdminEnv } from '../middleware/adminAuth';
-import { adminAuth, getCookie, isLoginRateLimited, recordFailedLogin, clearLoginFailures } from '../middleware/adminAuth';
+import { adminAuth, getAdminPassword, getCookie, isLoginRateLimited, recordFailedLogin, clearLoginFailures } from '../middleware/adminAuth';
 
 const admin = new Hono<{ Bindings: AdminEnv }>();
 admin.use('*', adminAuth);

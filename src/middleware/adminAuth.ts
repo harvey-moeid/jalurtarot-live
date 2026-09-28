@@ -26,7 +26,7 @@ const ADMIN_SESSION_TTL_SECONDS = 8 * 60 * 60;
 const ADMIN_LOGIN_WINDOW_SECONDS = 15 * 60;
 const ADMIN_LOGIN_MAX_ATTEMPTS = 8;
 
-function getAdminPassword(c: any): string | null {
+export function getAdminPassword(c: any): string | null {
   const pwd = c.env.ADMIN_PASSWORD;
   if (!pwd || typeof pwd !== 'string' || pwd.trim() === '') return null;
   return pwd.trim();
