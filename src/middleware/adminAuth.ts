@@ -12,14 +12,6 @@ export type AdminEnv = Env & {
   RENDER_API_KEY?: string;
   RENDER_LISTENER_SERVICE_ID?: string;
   RENDER_LISTENER_SERVICE_NAME?: string;
-  ENABLE_FALLBACK_LLM?: string;
-  FALLBACK_LLM_MODEL?: string;
-  OPENROUTER_BASE_URL?: string;
-  OPENROUTER_API_KEY?: string;
-  OPENROUTER_API_KEY_2?: string;
-  OPENROUTER_API_KEY_3?: string;
-  OPENROUTER_API_KEY_4?: string;
-  OPENROUTER_API_KEY_5?: string;
 };
 
 const ADMIN_SESSION_TTL_SECONDS = 8 * 60 * 60;
