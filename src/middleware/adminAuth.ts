@@ -84,6 +84,24 @@ export async function clearLoginFailures(c: any): Promise<void> {
   try { await c.env.RATE_LIMIT_KV.delete('admin:login:' + getClientIp(c)); } catch {}
 }
 
+export async function createAdminSession(c: any): Promise<string> {
+  const token = (crypto as any).randomUUID() as string;
+  const expiresAt = Date.now() + ADMIN_SESSION_TTL_SECONDS * 1000;
+  await c.env.RATE_LIMIT_KV.put(
+    'admin:session:' + token,
+    JSON.stringify({ createdAt: Date.now(), expiresAt }),
+    { expirationTtl: ADMIN_SESSION_TTL_SECONDS },
+  );
+  return token;
+}
+
+export async function destroyAdminSession(c: any): Promise<void> {
+  const token = getCookie(c, 'admin_token');
+  if (token) {
+    try { await c.env.RATE_LIMIT_KV.delete('admin:session:' + token); } catch {}
+  }
+}
+
 export const adminAuth = createMiddleware<{ Bindings: AdminEnv }>(async (c, next) => {
   const path = c.req.path;
   if (path === '/login' || path === '/logout') {

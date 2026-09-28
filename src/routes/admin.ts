@@ -4,7 +4,7 @@ import { getLLMConfig, setLLMConfig } from '../lib/config';
 import { generateLiveDraw, saveLiveDraw, getLiveDraw, type LiveSpreadId } from '../lib/live';
 
 import type { AdminEnv } from '../middleware/adminAuth';
-import { adminAuth, getAdminPassword, getCookie, isLoginRateLimited, recordFailedLogin, clearLoginFailures } from '../middleware/adminAuth';
+import { adminAuth, getAdminPassword, isLoginRateLimited, recordFailedLogin, clearLoginFailures, createAdminSession, destroyAdminSession } from '../middleware/adminAuth';
 
 const admin = new Hono<{ Bindings: AdminEnv }>();
 admin.use('*', adminAuth);
@@ -693,13 +693,7 @@ admin.post('/login', async (c) => {
   }
 
   await clearLoginFailures(c);
-  const token = (crypto as any).randomUUID() as string;
-  const expiresAt = Date.now() + ADMIN_SESSION_TTL_SECONDS * 1000;
-  await c.env.RATE_LIMIT_KV.put(
-    'admin:session:' + token,
-    JSON.stringify({ createdAt: Date.now(), expiresAt }),
-    { expirationTtl: ADMIN_SESSION_TTL_SECONDS },
-  );
+  const token = await createAdminSession(c);
 
   const res = c.redirect('/admin');
   res.headers.set('Set-Cookie',
@@ -710,10 +704,7 @@ admin.post('/login', async (c) => {
 
 // POST /admin/logout
 admin.post('/logout', async (c) => {
-  const token = getCookie(c, 'admin_token');
-  if (token) {
-    try { await c.env.RATE_LIMIT_KV.delete('admin:session:' + token); } catch {}
-  }
+  await destroyAdminSession(c);
   const res = c.redirect('/admin/login');
   res.headers.set('Set-Cookie',
     'admin_token=; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=0'
