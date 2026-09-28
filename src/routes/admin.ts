@@ -773,7 +773,7 @@ admin.post('/login', async (c) => {
   }
 
   await clearLoginFailures(c);
-  const token = crypto.randomUUID();
+  const token = (crypto as any).randomUUID() as string;
   const expiresAt = Date.now() + ADMIN_SESSION_TTL_SECONDS * 1000;
   await c.env.RATE_LIMIT_KV.put(
     'admin:session:' + token,
