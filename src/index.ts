@@ -17,6 +17,7 @@ app.use('*', async (c, next) => {
   c.header('Referrer-Policy', 'strict-origin-when-cross-origin');
   c.header('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
   c.header('X-Frame-Options', 'SAMEORIGIN');
+  c.header('Content-Security-Policy', "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'self'; form-action 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'");
   if (c.req.path.startsWith('/admin')) c.header('Cache-Control', 'no-store');
 });
 
@@ -58,7 +59,7 @@ app.get('/support', (c) => c.html(supportPage()));
 // Overlay OBS untuk Ramalan Live (transparan, dipakai sebagai Browser Source)
 app.get('/live', (c) => c.html(liveOverlayPage()));
 
-// ââ 404 ââ
+// Ã¢ÂÂÃ¢ÂÂ 404 Ã¢ÂÂÃ¢ÂÂ
 app.notFound((c) => {
   return c.html(`<!DOCTYPE html>
 <html lang="id">
