@@ -30,38 +30,70 @@ const admin = new Hono<{ Bindings: AdminEnv }>();
 // -- AUTH HELPERS --
 // ======================================
 
-function getSessionToken(password: string): string {
-  // Deterministic token: base64url(password + salt)
-  // Gunakan base64url agar aman di cookie value (tidak ada +, /, = yang bisa rusak)
-  const raw = `jalurtarot-admin:${password}`;
-  // btoa lalu ganti karakter tidak aman di cookie: + -> -, / -> _, = hilangkan
-  return btoa(raw).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
-}
+const ADMIN_SESSION_TTL_SECONDS = 8 * 60 * 60;
+const ADMIN_LOGIN_WINDOW_SECONDS = 15 * 60;
+const ADMIN_LOGIN_MAX_ATTEMPTS = 8;
 
-function getAdminPassword(c: any): string {
-  // Ambil ADMIN_PASSWORD dari env, trim whitespace untuk mencegah masalah
-  // jika secret di-set dengan spasi/newline tidak sengaja
+function getAdminPassword(c: any): string | null {
   const pwd = c.env.ADMIN_PASSWORD;
-  if (!pwd || typeof pwd !== 'string' || pwd.trim() === '') {
-    return 'changeme';
-  }
+  if (!pwd || typeof pwd !== 'string' || pwd.trim() === '') return null;
   return pwd.trim();
 }
 
-function isAuthenticated(c: any): boolean {
-  const cookie = c.req.header('Cookie') || '';
-  const match = cookie.match(/admin_token=([^;,\s]+)/);
-  if (!match) return false;
-  const tokenFromCookie = match[1].trim();
-  const expected = getSessionToken(getAdminPassword(c));
-  return tokenFromCookie === expected;
-}
-
-function requireAuth(c: any): Response | null {
-  if (!isAuthenticated(c)) {
-    return c.redirect('/admin/login');
+function getCookie(c: any, name: string): string | null {
+  const parts = (c.req.header('Cookie') || '').split(';');
+  for (const part of parts) {
+    const [key, ...rest] = part.trim().split('=');
+    if (key === name) return decodeURIComponent(rest.join('='));
   }
   return null;
+}
+
+function getClientIp(c: any): string {
+  return (c.req.header('CF-Connecting-IP') || c.req.header('X-Forwarded-For') || 'unknown').split(',')[0].trim().slice(0, 100);
+}
+
+async function isAuthenticated(c: any): Promise<boolean> {
+  const token = getCookie(c, 'admin_token');
+  if (!token) return false;
+  try {
+    const raw = await c.env.RATE_LIMIT_KV.get('admin:session:' + token);
+    if (!raw) return false;
+    const session = JSON.parse(raw) as { expiresAt?: number };
+    if (!session.expiresAt || Date.now() >= session.expiresAt) {
+      await c.env.RATE_LIMIT_KV.delete('admin:session:' + token);
+      return false;
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function requireAuth(c: any): Promise<Response | null> {
+  if (!(await isAuthenticated(c))) return c.redirect('/admin/login');
+  return null;
+}
+
+async function isLoginRateLimited(c: any): Promise<boolean> {
+  try {
+    const raw = await c.env.RATE_LIMIT_KV.get('admin:login:' + getClientIp(c));
+    return Number(raw || 0) >= ADMIN_LOGIN_MAX_ATTEMPTS;
+  } catch {
+    return false;
+  }
+}
+
+async function recordFailedLogin(c: any): Promise<void> {
+  try {
+    const key = 'admin:login:' + getClientIp(c);
+    const count = Number(await c.env.RATE_LIMIT_KV.get(key) || 0) + 1;
+    await c.env.RATE_LIMIT_KV.put(key, String(count), { expirationTtl: ADMIN_LOGIN_WINDOW_SECONDS });
+  } catch {}
+}
+
+async function clearLoginFailures(c: any): Promise<void> {
+  try { await c.env.RATE_LIMIT_KV.delete('admin:login:' + getClientIp(c)); } catch {}
 }
 
 // -- RENDER LISTENER CONTROL --
@@ -734,33 +766,37 @@ admin.post('/login', async (c) => {
   const password = (body['password'] as string || '').trim();
   const expected = getAdminPassword(c);
 
-  // Cek apakah ADMIN_PASSWORD belum di-set di Cloudflare Secrets
-  const isUsingFallback = !c.env.ADMIN_PASSWORD || (c.env.ADMIN_PASSWORD as string).trim() === '';
-
-  if (!password || password !== expected) {
-    // Jika pakai fallback, tampilkan hint
-    const hint = isUsingFallback ? '&hint=1' : '';
-    return c.redirect(`/admin/login?error=1${hint}`);
+  if (await isLoginRateLimited(c)) return c.redirect('/admin/login?error=1&rate=1');
+  if (!expected || !password || password !== expected) {
+    await recordFailedLogin(c);
+    return c.redirect('/admin/login?error=1');
   }
 
-  const token = getSessionToken(expected);
+  await clearLoginFailures(c);
+  const token = crypto.randomUUID();
+  const expiresAt = Date.now() + ADMIN_SESSION_TTL_SECONDS * 1000;
+  await c.env.RATE_LIMIT_KV.put(
+    'admin:session:' + token,
+    JSON.stringify({ createdAt: Date.now(), expiresAt }),
+    { expirationTtl: ADMIN_SESSION_TTL_SECONDS },
+  );
+
   const res = c.redirect('/admin');
-  // Set cookie dengan Path=/ agar lebih kompatibel lintas redirect
   res.headers.set('Set-Cookie',
-    `admin_token=${token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${7 * 24 * 60 * 60}`
+    `admin_token=${encodeURIComponent(token)}; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=${ADMIN_SESSION_TTL_SECONDS}`
   );
   return res;
 });
 
 // POST /admin/logout
 admin.post('/logout', (c) => {
+  const token = getCookie(c, 'admin_token');
+  if (token) {
+    try { await c.env.RATE_LIMIT_KV.delete('admin:session:' + token); } catch {}
+  }
   const res = c.redirect('/admin/login');
-  // Hapus cookie dari kedua path untuk kompatibilitas (ada yang cookie lama pakai Path=/admin)
-  res.headers.append('Set-Cookie',
-    `admin_token=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0`
-  );
-  res.headers.append('Set-Cookie',
-    `admin_token=; Path=/admin; HttpOnly; SameSite=Strict; Max-Age=0`
+  res.headers.set('Set-Cookie',
+    'admin_token=; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=0'
   );
   return res;
 });
@@ -770,7 +806,7 @@ admin.post('/logout', (c) => {
 // ======================================
 
 admin.get('/', async (c) => {
-  const authErr = requireAuth(c);
+  const authErr = await requireAuth(c);
   if (authErr) return authErr;
 
   const entries = await listCreditKeys(c.env);
@@ -885,7 +921,7 @@ admin.get('/', async (c) => {
 // ======================================
 
 admin.get('/credits', async (c) => {
-  const authErr = requireAuth(c);
+  const authErr = await requireAuth(c);
   if (authErr) return authErr;
 
   const entries = await listCreditKeys(c.env);
@@ -1013,7 +1049,7 @@ admin.get('/credits', async (c) => {
 
 // POST /admin/credits/adjust
 admin.post('/credits/adjust', async (c) => {
-  const authErr = requireAuth(c);
+  const authErr = await requireAuth(c);
   if (authErr) return authErr;
 
   const body = await c.req.parseBody();
@@ -1036,7 +1072,7 @@ admin.post('/credits/adjust', async (c) => {
 
 // POST /admin/credits/reset
 admin.post('/credits/reset', async (c) => {
-  const authErr = requireAuth(c);
+  const authErr = await requireAuth(c);
   if (authErr) return authErr;
 
   const body = await c.req.parseBody();
@@ -1064,7 +1100,7 @@ admin.post('/credits/reset', async (c) => {
 // ======================================
 
 admin.get('/health', async (c) => {
-  const authErr = requireAuth(c);
+  const authErr = await requireAuth(c);
   if (authErr) return authErr;
 
   // Baca config LLM dari KV (bisa diedit dari admin panel ini)
@@ -1290,7 +1326,7 @@ wrangler secret put OPENROUTER_API_KEY_3</pre>
 
 // -- POST /admin/config/model - simpan model ke KV --
 admin.post('/config/model', async (c) => {
-  const authErr = requireAuth(c);
+  const authErr = await requireAuth(c);
   if (authErr) return authErr;
 
   const body = await c.req.parseBody();
@@ -1317,7 +1353,7 @@ admin.post('/config/model', async (c) => {
 
 // -- POST /admin/config/llm-toggle - aktif/nonaktifkan LLM --
 admin.post('/config/llm-toggle', async (c) => {
-  const authErr = requireAuth(c);
+  const authErr = await requireAuth(c);
   if (authErr) return authErr;
 
   const body = await c.req.parseBody();
@@ -1338,7 +1374,7 @@ admin.post('/config/llm-toggle', async (c) => {
 // ======================================
 
 admin.get('/banner', async (c) => {
-  const authErr = requireAuth(c);
+  const authErr = await requireAuth(c);
   if (authErr) return authErr;
 
   const banner = await getBanner(c.env);
@@ -1412,7 +1448,7 @@ admin.get('/banner', async (c) => {
 
 // POST /admin/banner/set
 admin.post('/banner/set', async (c) => {
-  const authErr = requireAuth(c);
+  const authErr = await requireAuth(c);
   if (authErr) return authErr;
 
   const body = await c.req.parseBody();
@@ -1432,7 +1468,7 @@ admin.post('/banner/set', async (c) => {
 
 // POST /admin/banner/deactivate
 admin.post('/banner/deactivate', async (c) => {
-  const authErr = requireAuth(c);
+  const authErr = await requireAuth(c);
   if (authErr) return authErr;
 
   try {
@@ -1448,7 +1484,7 @@ admin.post('/banner/deactivate', async (c) => {
 // ======================================
 
 admin.get('/blacklist', async (c) => {
-  const authErr = requireAuth(c);
+  const authErr = await requireAuth(c);
   if (authErr) return authErr;
 
   const msg = c.req.query('msg');
@@ -1530,7 +1566,7 @@ admin.get('/blacklist', async (c) => {
 
 // POST /admin/blacklist/add
 admin.post('/blacklist/add', async (c) => {
-  const authErr = requireAuth(c);
+  const authErr = await requireAuth(c);
   if (authErr) return authErr;
 
   const body = await c.req.parseBody();
@@ -1551,7 +1587,7 @@ admin.post('/blacklist/add', async (c) => {
 
 // POST /admin/blacklist/remove
 admin.post('/blacklist/remove', async (c) => {
-  const authErr = requireAuth(c);
+  const authErr = await requireAuth(c);
   if (authErr) return authErr;
 
   const body = await c.req.parseBody();
@@ -1593,7 +1629,7 @@ export async function checkBlacklist(env: AdminEnv, ip: string): Promise<boolean
 
 // GET /admin/live - panel kontrol & panduan setup
 admin.get('/live', async (c) => {
-  const authErr = requireAuth(c);
+  const authErr = await requireAuth(c);
   if (authErr) return authErr;
   const msg = c.req.query('msg');
   const msgType = c.req.query('type') || 'success';
@@ -1661,7 +1697,7 @@ admin.get('/live', async (c) => {
 });
 
 admin.post('/live/render/start', async (c) => {
-  const authErr = requireAuth(c);
+  const authErr = await requireAuth(c);
   if (authErr) return authErr;
   try {
     const service = await getRenderListener(c.env);
@@ -1673,7 +1709,7 @@ admin.post('/live/render/start', async (c) => {
 });
 
 admin.post('/live/render/stop', async (c) => {
-  const authErr = requireAuth(c);
+  const authErr = await requireAuth(c);
   if (authErr) return authErr;
   try {
     const service = await getRenderListener(c.env);
@@ -1685,7 +1721,7 @@ admin.post('/live/render/stop', async (c) => {
 });
 
 admin.post('/live/test-draw', async (c) => {
-  const authErr = requireAuth(c);
+  const authErr = await requireAuth(c);
   if (authErr) return authErr;
 
   const body = await c.req.parseBody();
