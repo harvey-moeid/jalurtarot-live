@@ -15,6 +15,19 @@ export const ADMIN_SESSION_TTL_SECONDS = 8 * 60 * 60;
 const ADMIN_LOGIN_WINDOW_SECONDS = 15 * 60;
 const ADMIN_LOGIN_MAX_ATTEMPTS = 8;
 
+// Path yang boleh diakses tanpa sesi admin.
+// PENTING: `c.req.path` di Hono selalu berisi path PENUH request (mis. '/admin/login'),
+// meskipun middleware dipasang lewat sub-app yang di-mount di '/admin'.
+// Jadi daftar ini harus memakai path penuh. Versi sebelumnya membandingkan dengan
+// '/login' sehingga tidak pernah cocok -> /admin/login me-redirect ke dirinya sendiri
+// (ERR_TOO_MANY_REDIRECTS).
+const PUBLIC_ADMIN_PATHS = new Set(['/admin/login', '/admin/logout']);
+
+function normalizePath(path: string): string {
+  // Buang trailing slash supaya '/admin/login/' juga dianggap publik.
+  return path.length > 1 ? path.replace(/\/+$/, '') : path;
+}
+
 export function getAdminPassword(c: any): string | null {
   const pwd = c.env.ADMIN_PASSWORD;
   if (!pwd || typeof pwd !== 'string' || pwd.trim() === '') return null;
@@ -91,8 +104,8 @@ export async function destroyAdminSession(c: any): Promise<void> {
 }
 
 export const adminAuth = createMiddleware<{ Bindings: AdminEnv }>(async (c, next) => {
-  const path = c.req.path;
-  if (path === '/login' || path === '/logout') {
+  // Halaman login/logout dilewatkan tanpa cek sesi; selain itu wajib login.
+  if (PUBLIC_ADMIN_PATHS.has(normalizePath(c.req.path))) {
     await next();
     return;
   }
