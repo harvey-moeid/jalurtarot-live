@@ -5,8 +5,13 @@
   "description": "Jalur Tarot TikTok LIVE listener via Euler Stream managed WebSocket",
   "type": "module",
   "main": "index.js",
-  "engines": { "node": ">=20" },
-  "scripts": { "start": "node index.js" },
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node index.js",
+    "test": "node --test test/*.test.js"
+  },
   "dependencies": {
     "@eulerstream/euler-websocket-sdk": "1.0.0",
     "dotenv": "16.4.7",
