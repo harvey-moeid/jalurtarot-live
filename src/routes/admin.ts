@@ -592,15 +592,31 @@ admin.post('/logout', async (c) => {
 
 admin.get('/', async (c) => {
   const blacklistedEntries = await listBlacklistEntries(c.env);
-  const blacklistedCount = blacklistedEntries.length;
+  const current = await getLiveDraw(c.env);
+  const renderConfigured = Boolean((c.env as any).RENDER_API_KEY);
+  const liveSecretConfigured = Boolean((c.env as any).LIVE_SECRET);
 
   const content = `
-    ${banner?.active ? `<div class="alert alert-info">[banner] Banner aktif: "${esc(banner.text)}"</div>` : ''}
     <div class="stats-row">
       <div class="stat-box">
         <div class="stat-label">IP Blacklisted</div>
-        <div class="stat-value">${blacklistedCount}</div>
-        <div class="stat-sub">diblokir</div>
+        <div class="stat-value">${blacklistedEntries.length}</div>
+        <div class="stat-sub">aktif di KV</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-label">Live Draw</div>
+        <div class="stat-value">${current ? '1' : '0'}</div>
+        <div class="stat-sub">${current ? 'draw tersedia' : 'belum ada draw'}</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-label">Render Listener</div>
+        <div class="stat-value">${renderConfigured ? 'ON' : 'OFF'}</div>
+        <div class="stat-sub">${renderConfigured ? 'API configured' : 'secret belum di-set'}</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-label">Live Secret</div>
+        <div class="stat-value">${liveSecretConfigured ? 'ON' : 'OFF'}</div>
+        <div class="stat-sub">trigger listener</div>
       </div>
     </div>
 
@@ -610,59 +626,21 @@ admin.get('/', async (c) => {
         <a href="/admin/live" class="btn btn-ghost">[live] Kontrol Live</a>
         <a href="/admin/banner" class="btn btn-ghost">[banner] Kelola Banner</a>
         <a href="/admin/blacklist" class="btn btn-ghost">[blocked] Kelola Blacklist</a>
+        <a href="/live" target="_blank" class="btn btn-ghost">[overlay] Buka Overlay</a>
       </div>
-    </div>>
     </div>
 
     <div class="card">
-      <div class="card-title">Top IP by Usage (5 Teratas)</div>
-      ${entries.length === 0 ? `<div class="empty-state"><p>[empty]</p><p>Belum ada data kredit</p></div>` : `
-      <div class="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>IP</th>
-              <th>Dipakai</th>
-              <th>Bonus</th>
-              <th>Usage</th>
-              <th>Reset</th>
-              <th>Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${entries
-              .sort((a, b) => b.state.used - a.state.used)
-              .slice(0, 5)
-              .map(e => {
-                const effective = CREDIT_LIMIT + e.state.credited;
-                const pct = Math.min(100, Math.round((e.state.used / effective) * 100));
-                const resetDate = new Date(e.state.resetAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' });
-                const fillClass = pct >= 90 ? 'danger' : pct >= 70 ? 'warning' : '';
-                return `<tr>
-                  <td class="mono">${e.ip}</td>
-                  <td>${e.state.used} / ${effective}</td>
-                  <td>${e.state.credited > 0 ? `<span class="badge badge-gold">+${e.state.credited}</span>` : '-'}</td>
-                  <td>
-                    <div class="progress-bar"><div class="progress-fill ${fillClass}" style="width:${pct}%"></div></div>
-                    <span style="font-size:11px;color:var(--text-dim);margin-left:6px;">${pct}%</span>
-                  </td>
-                  <td style="font-size:12px;color:var(--text-dim);">${resetDate}</td>
-                  <td>${e.blacklisted ? '<span class="badge badge-red">BLOCKED</span>' : pct >= 90 ? '<span class="badge badge-yellow">NEAR LIMIT</span>' : '<span class="badge badge-green">OK</span>'}</td>
-                </tr>`;
-              }).join('')}
-          </tbody>
-        </table>
-      </div>
-      `}
+      <div class="card-title">Status Sistem</div>
+      <p style="font-size:13px;color:var(--text-dim);line-height:1.8;">
+        JalurTarot Live berjalan dalam mode lokal/static: kartu dan interpretasi berasal dari data repository.
+        Listener TikTok mengirim trigger terautentikasi ke Worker, lalu draw terbaru disimpan di KV untuk overlay.
+      </p>
     </div>
   `;
 
   return c.html(adminShell('[dashboard] Dashboard', content, 'dashboard'));
 });
-
-// ======================================
-// -- ROUTES: BANNER --
-// ======================================
 
 admin.get('/banner', async (c) => {
   const banner = await getBanner(c.env);
