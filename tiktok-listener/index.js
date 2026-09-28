@@ -2,6 +2,7 @@ import 'dotenv/config';
 import WebSocket from 'ws';
 import { createWebSocketUrl } from '@eulerstream/euler-websocket-sdk';
 import { userName, giftName, giftCoins, giftRepeat, isStreakInProgress } from './logic.js';
+import { enqueueDraw } from './queue.js';
 
 
 const env = process.env;
@@ -191,7 +192,7 @@ function handleGift(msg) {
   }
 
   console.log('GIFT: ' + sender + ' mengirim ' + name + ' x' + count + ' (' + coins + ' koin)');
-  void triggerDraw({ sender, name, count, spread: coins >= threeCardMinValue ? 'three-card' : defaultSpread });
+  void enqueueDraw(() => triggerDraw({ sender, name, count, spread: coins >= threeCardMinValue ? 'three-card' : defaultSpread }));
 }
 
 function handleLike(msg) {
