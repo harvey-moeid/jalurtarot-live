@@ -376,14 +376,17 @@ RATE_LIMIT_KV: id = "2545355c3b6e4012a1bddf0c66c181a0"
 | `MIN_GIFT_VALUE` | tidak | `1` | Nilai koin minimum (integer >= 0) |
 | `THREE_CARD_MIN_VALUE` | tidak | `5` | Koin minimum untuk spread 3 kartu |
 | `DEFAULT_SPREAD` | tidak | `single` | `single` atau `three-card` |
-| `LIKE_MILESTONE` | tidak | lihat catatan | Setiap N like memicu draw; kosong = nonaktif |
+| `LIKE_MILESTONE` | tidak | `40` | Setiap N like memicu draw; kosong = nonaktif |
 | `RECONNECT_MIN_MS` / `RECONNECT_MAX_MS` | tidak | `5000` / `60000` | Backoff reconnect |
 | `WORKER_TIMEOUT_MS` | tidak | `10000` | Timeout panggilan ke Worker |
 | `DEBUG_EVENTS` | tidak | nonaktif | `1` = log semua event mentah |
 
-> Catatan `LIKE_MILESTONE`: bila variabel ini tidak di-set sama sekali, kode saat
-> ini menghasilkan `NaN` sehingga fitur nonaktif (bukan default 1000). Di produksi
-> nilainya diatur lewat env, jadi tidak berdampak; isi eksplisit bila ingin aktif.
+> Catatan `LIKE_MILESTONE`: bila variabel ini tidak di-set sama sekali, listener
+> memakai default 40 (sebelumnya menghasilkan `NaN` sehingga fitur mati diam-diam,
+> lalu default 1000 di rev11). `.env.example` dan `render.yaml` juga berisi 40.
+> Nilai yang sudah diisi manual di dashboard Render / `.env` Termux tetap
+> dipakai, jadi samakan ke 40 atau hapus variabelnya. Listener perlu
+> di-redeploy / di-restart setelah perubahan.
 
 ---
 
@@ -433,7 +436,7 @@ lib/live.ts                -> lib/draw, lib/spreads, lib/liveAspectMeanings, lib
 lib/liveAspectMeanings.ts  -> (standalone, data statis hasil parse markdown)
 lib/daily.ts                -> lib/types, lib/cards
 lib/draw.ts                  -> lib/cards, lib/types
-lib/config.ts                 -> (legacy, standalone, hanya dipakai /admin/health)
+lib/config.ts                -> (legacy, standalone, hanya dipakai /admin/health)
 
 tiktok-listener/index.js -> @eulerstream/euler-websocket-sdk, ws, dotenv (proyek Node.js terpisah, TIDAK di-bundle ke Worker)
 ```
