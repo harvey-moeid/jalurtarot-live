@@ -1,10 +1,44 @@
 # PROJECT_CONTEXT.md - JalurTarot Free
 
-> Last updated: 2026-09-26 (rev 9 - "Ramalan Live + Render listener") | Status: Production ready
+> Last updated: 2026-09-28 (rev 10 - "Listener Euler + perbaikan overlay") | Status: Production ready
 >
 > Catatan encoding: versi file ini sebelumnya berisi karakter box-drawing/emoji
 > yang rusak (mojibake) akibat beberapa kali proses copy-paste. Versi ini
 > ditulis ulang memakai karakter ASCII biasa saja supaya tidak rusak lagi.
+> Jaga tetap ASCII saat mengedit (tanpa tanda pisah panjang, titik tengah, emoji).
+
+---
+
+## Rev 10 - Listener Euler + perbaikan overlay
+
+- **Dokumen disesuaikan dengan kode**: listener `tiktok-listener/` sudah memakai
+  **Euler Stream managed WebSocket** (`@eulerstream/euler-websocket-sdk` + `ws`),
+  bukan lagi `tiktok-live-connector`. Bagian Stack, Arsitektur, Dependency Map
+  dan Known Limitations di bawah sudah diperbarui.
+- **Domain production Live**: `https://livejalur.muidsoft.com` (route `/live`,
+  `/api/live/state`, `/api/live/trigger` terverifikasi aktif 2026-09-28).
+- **Overlay** `/live` adalah **layar penuh** (portrait & landscape), bukan
+  transparan: `body` dan `#stage` berlatar gelap. Dokumen versi lama menyebutnya
+  transparan - itu tidak sesuai dengan kode.
+- **Perbaikan listener** (`tiktok-listener/index.js`):
+  - Gift streak (`giftType` 1) hanya diproses pada update terakhir (`repeatEnd`).
+    Nama field belum diverifikasi ke skema Euler v2; cek dengan `DEBUG_EVENTS=1`.
+    Kalau field tidak ada, perilaku sama seperti sebelumnya.
+  - `giftCoins()` mengembalikan `null` bila field koin tidak terbaca. Gift yang
+    dibuang di-log (`GIFT DIABAIKAN`), tidak lagi hilang diam-diam.
+  - Event like pertama tiap koneksi hanya jadi baseline (`LIKE BASELINE`), bukan
+    pemicu draw. Sebelumnya reconnect me-reset indeks ke 0 sehingga milestone
+    lama bisa memicu draw palsu.
+  - Import `ClientCloseCode` yang tidak dipakai dihapus.
+- **Perbaikan Worker**:
+  - `GET /api/live/state` hanya mengembalikan draw berumur <= 45 detik (jam
+    server), supaya overlay yang dibuka / di-refresh tidak menampilkan draw lama
+    (KV menyimpan draw 6 jam). Nilai `LIVE_STATE_MAX_AGE_MS` di `routes/live.ts`
+    harus disamakan dengan `HIDE_AFTER_MS` di overlay (45000 ms).
+  - `X-Live-Secret` dibandingkan dengan `safeEqual()` (tanpa short-circuit).
+  - `lib/live.ts` ditulis ulang ASCII-only (hilangkan mojibake pada teks tiga
+    kartu yang dilihat penonton); spasi sisa di judul kartu tunggal dihapus.
+- Detail per perubahan: `tiktok-listener/CHANGES-rev10.md`.
 
 ---
 
@@ -29,9 +63,10 @@ Repo ini diubah dari "Oracle tarot berbasis LLM" menjadi **Ramalan Live** -
   `src/lib/liveAspectMeanings.ts`, dipakai khusus untuk teks ramalan live
   yang singkat & padat.
 - **Fitur baru: Ramalan Live** - terhubung ke TikTok Live lewat bot
-  Node.js terpisah (folder `tiktok-listener/`, library
-  `tiktok-live-connector`). Saat gift target masuk, bot memanggil
-  Worker -> kartu ditarik -> tampil otomatis di overlay OBS.
+  Node.js terpisah (folder `tiktok-listener/`). Saat gift target masuk,
+  bot memanggil Worker -> kartu ditarik -> tampil otomatis di overlay.
+  (Rev 8 memakai library `tiktok-live-connector`; sejak itu diganti ke Euler,
+  lihat Rev 10.)
 
 ## Rev 9 - Opsi deploy listener: Termux atau Render.com
 
@@ -53,6 +88,8 @@ Repo ini diubah dari "Oracle tarot berbasis LLM" menjadi **Ramalan Live** -
   yang membedakan. Akibatnya gift kedua (beda nama/jumlah) dari pengirim
   yang sama dalam 15 detik salah dianggap duplikat dan diabaikan. Sudah
   diperbaiki jadi `` `${sender}|${giftName}|${giftCount}` ``.
+  (Catatan rev10: listener versi Euler tidak lagi memakai `makeTriggerKey()`;
+  dedupe kini berdasarkan `msgId` lewat `rememberEvent()`.)
 
 ---
 
@@ -60,8 +97,9 @@ Repo ini diubah dari "Oracle tarot berbasis LLM" menjadi **Ramalan Live** -
 
 | URL | Keterangan |
 |-----|-----------|
-| `https://jalurtarotfree.muidsoft.com` | **Domain utama (Production)** |
-| `https://jalurtarotfree.workers.dev` | Cloudflare default URL |
+| `https://livejalur.muidsoft.com` | **Domain Live (Production)** - `/live`, `/api/live/*` aktif |
+| `https://jalurtarotfree.muidsoft.com` | Deployment lain: `/` aktif, tetapi `/live` dan `/api/live/state` mengembalikan 404 (dicek 2026-09-28) |
+| `https://jalurtarotfree.workers.dev` | Cloudflare default URL (belum dicek) |
 
 ---
 
@@ -75,9 +113,10 @@ Repo ini diubah dari "Oracle tarot berbasis LLM" menjadi **Ramalan Live** -
 | Static Assets | Cloudflare Static Assets (`./public`) |
 | KV Storage | Cloudflare KV (`RATE_LIMIT_KV`) - juga dipakai simpan state Ramalan Live |
 | Interpretasi | 100% statis/lokal - **tidak ada AI/LLM** |
-| Bot TikTok Live | Node.js terpisah (`tiktok-listener/`), `tiktok-live-connector` - jalan di Termux (gratis) atau Render.com (Background Worker, berbayar) atau VPS sendiri |
+| Bot TikTok Live | Node.js >= 20 terpisah (`tiktok-listener/`), Euler Stream managed WebSocket (`@eulerstream/euler-websocket-sdk`, `ws`, `dotenv`) - jalan di Termux (gratis) atau Render.com (Background Worker, berbayar) atau VPS sendiri |
 | Build | `wrangler deploy` |
 | Logging | Cloudflare Observability (logs enabled, traces off) |
+| Branch utama | `master` (bukan `main`) |
 
 ---
 
@@ -105,7 +144,7 @@ jalurtarot-live/
       interpret.ts              - Static engine (tone-aware: spiritual/praktis/puitis)
       enrichedMeanings.ts       - Enriched card meanings (dipakai reading biasa)
       liveAspectMeanings.ts     - makna Hubungan/Karir/Nasib dari arti-tarot-78-rider-waite.md
-      live.ts                   - generateLiveDraw(), saveLiveDraw(), getLiveDraw()
+      live.ts                   - generateLiveDraw(), saveLiveDraw(), getLiveDraw() (ASCII-only sejak rev10)
       daily.ts                  - Daily card (djb2 hash deterministik)
       draw.ts                   - Fisher-Yates shuffle
       layout.ts                 - HTML shell + CSS design system (panel kredit Oracle sudah dihapus rev8)
@@ -113,13 +152,14 @@ jalurtarot-live/
       icons.ts                   - SVG icons
       config.ts                   - LLM config helper (legacy, dipertahankan agar /admin/health tetap jalan)
   tiktok-listener/              - bot Node.js terpisah, TIDAK di-deploy ke Worker
-    index.js                   - Listener gift TikTok -> POST /api/live/trigger
-    package.json                - ESM, dependency: tiktok-live-connector, dotenv
+    index.js                   - Listener Euler WebSocket: gift/like -> POST /api/live/trigger
+    package.json                - ESM, dependency: @eulerstream/euler-websocket-sdk, ws, dotenv
     .env.example
     render.yaml                 - Render Blueprint (Background Worker) - rev9
     README.md                   - Panduan setup, pilih Termux / Render.com / VPS
     TERMUX-SETUP.md             - panduan detail Termux
     RENDER-SETUP.md             - panduan detail Render.com - rev9
+    CHANGES-rev10.md            - catatan perbaikan rev10
   public/
     cards/major/                - 22 JPG
     cards/minor/                 - 56 JPG (cups/wands/swords/pentacles)
@@ -138,7 +178,7 @@ jalurtarot-live/
 
 | Data | Storage | TTL | Key Pattern |
 |------|---------|-----|-------------|
-| **Draw Ramalan Live terkini** | **KV** | **6 jam** | **`live:current`** |
+| **Draw Ramalan Live terkini** | **KV** | **6 jam** (tapi `/state` hanya menyajikan draw <= 45 detik, rev10) | **`live:current`** |
 | IP Blacklist | KV | permanen | `blacklist:{IP}` |
 | Banner aktif | KV | 30 hari | `banner:active` |
 | Credit state per IP *(legacy, tidak dipakai lagi)* | KV | 7 hari rolling | `credit:{IP}` |
@@ -172,7 +212,7 @@ GET  /reading              -> readingPage()          - hanya single & three-card
 GET  /library              -> libraryPage()
 GET  /history              -> historyPage()
 GET  /support              -> supportPage()
-GET  /live                 -> liveOverlayPage()       - overlay OBS (transparan, polling)
+GET  /live                 -> liveOverlayPage()       - overlay layar penuh (polling tiap 1 dtk), dibuka di OBS Browser Source / perangkat
 
 GET  /api/daily-card       -> dailyCardData(?date=YYYY-MM-DD)
 POST /api/interpret        -> interpretasi statis (SSE stream, format dipertahankan) - tanpa AI
@@ -182,9 +222,9 @@ POST /api/claim-daily      -> stub (selalu unlimited, rev8)
 GET  /api/banner           -> banner aktif dari KV (publik, untuk frontend)
 
 # Ramalan Live
-POST /api/live/trigger     -> auth: header X-Live-Secret. Body {spreadId, username, giftName?, giftCount?}
+POST /api/live/trigger     -> auth: header X-Live-Secret (dibandingkan dengan safeEqual). Body {spreadId, username, giftName?, giftCount?}
                                tarik kartu, simpan ke KV live:current. Dipanggil bot tiktok-listener/.
-GET  /api/live/state       -> { draw: LiveDraw | null }. Di-poll halaman /live tiap ~2 detik.
+GET  /api/live/state       -> { draw: LiveDraw | null }. draw = null bila lebih tua dari 45 detik (rev10). Di-poll halaman /live tiap ~1 detik.
 
 # Admin Panel (auth: cookie admin_token, Path=/)
 GET  /admin                -> dashboard stats
@@ -208,8 +248,11 @@ POST /admin/blacklist/remove -> unblock IP
 ## Ramalan Live - Arsitektur
 
 ```
-TikTok Live (penonton kirim gift)
-        | gift event
+TikTok Live (penonton kirim gift / like)
+        | event
+        v
+Euler Stream (managed WebSocket, pihak ketiga)
+        | WebcastGiftMessage / WebcastLikeMessage
         v
 tiktok-listener/index.js  (Node.js, jalan di Termux / VPS / Render.com)
         | POST /api/live/trigger  (header X-Live-Secret)
@@ -217,19 +260,25 @@ tiktok-listener/index.js  (Node.js, jalan di Termux / VPS / Render.com)
 Cloudflare Worker - routes/live.ts
         | tarik kartu (lib/live.ts) -> simpan ke KV live:current
         v
-GET /api/live/state  (di-poll halaman /live tiap ~2 detik)
+GET /api/live/state  (di-poll halaman /live tiap ~1 detik; hanya draw <= 45 dtk)
         v
-/live - overlay HTML transparan, dibuka sebagai OBS Browser Source.
+/live - overlay HTML layar penuh, dibuka sebagai OBS Browser Source / perangkat.
 Render kartu + ringkasan ramalan otomatis saat ada draw baru,
 sembunyi lagi setelah ~45 detik.
 ```
 
+**Pemicu di listener:**
+- Gift: `MIN_GIFT_VALUE` (koin minimum), `TARGET_GIFT_NAME` (kosong / `*` = semua gift).
+  Total koin >= `THREE_CARD_MIN_VALUE` -> spread `three-card`, selain itu `DEFAULT_SPREAD`.
+  Gift streak hanya dihitung pada update terakhir (`repeatEnd`).
+- Like milestone: setiap `LIKE_MILESTONE` like memicu satu draw `single`
+  (kosong = nonaktif). Event like pertama tiap koneksi hanya jadi baseline.
+
 **Kenapa bot terpisah dari Worker?** TikTok tidak punya API resmi untuk
-membaca event live/gift. Library reverse-engineering yang umum dipakai
-(`tiktok-live-connector`) butuh koneksi Node.js yang persisten - tidak
-kompatibel dengan runtime Cloudflare Workers. Jadi bot ini jalan di luar
-Worker (HP via Termux, VPS, atau Render.com), dan cuma memanggil Worker
-lewat HTTP biasa.
+membaca event live/gift. Euler Stream menyediakan koneksi WebSocket yang
+persisten - tidak kompatibel dengan model request/response Cloudflare
+Workers biasa. Jadi bot ini jalan di luar Worker (HP via Termux, VPS, atau
+Render.com), dan cuma memanggil Worker lewat HTTP biasa.
 
 **Keamanan trigger:** `POST /api/live/trigger` wajib header
 `X-Live-Secret` yang cocok dengan secret `LIVE_SECRET` di Worker
@@ -276,7 +325,7 @@ yang selalu pakai gaya singkat dari `liveAspectMeanings.ts`):
 |-------|--------|
 | 78 kartu RWS + gambar | selesai |
 | Interpretasi statis (tone-aware) | selesai |
-| **Ramalan Live (1/3 kartu, trigger gift TikTok, overlay OBS)** | selesai (rev8) |
+| **Ramalan Live (1/3 kartu, trigger gift TikTok, overlay layar penuh)** | selesai (rev8) |
 | **liveAspectMeanings dari data upload (Hubungan/Karir/Nasib)** | selesai (rev8) |
 | Kartu harian (deterministik) | selesai |
 | Tone selector (spiritual/praktis/puitis) | selesai |
@@ -288,6 +337,8 @@ yang selalu pakai gaya singkat dari `liveAspectMeanings.ts`):
 | IP Blacklist (KV-based) | selesai |
 | Banner KV (publik) | selesai |
 | Listener bisa jalan di Render.com (Background Worker) | selesai (rev9) |
+| Listener via Euler Stream WebSocket + like milestone | selesai |
+| Perbaikan listener/overlay rev10 (streak, log gift, baseline like, state segar, ASCII-only) | PR #6 - menunggu review/merge |
 | ~~AI/LLM via OpenRouter~~ | dihapus (rev8) |
 | ~~Sistem kredit~~ | dihapus (rev8, semua ramalan gratis) |
 | ~~Oracle multi-turn chat (`/agent`)~~ | dihapus (rev8) |
@@ -313,6 +364,27 @@ RATE_LIMIT_KV: id = "2545355c3b6e4012a1bddf0c66c181a0"
 > `217d91b266db4ded99680b61b5b0183c`. `wrangler.toml` di repo adalah
 > sumber kebenaran - id di atas sudah disamakan dengannya.
 
+### Environment listener (`tiktok-listener/.env` atau env var Render)
+
+| Variabel | Wajib | Default | Keterangan |
+|----------|-------|---------|-----------|
+| `TIKTOK_USERNAME` | ya | - | Akun TikTok target (dengan/tanpa `@`) |
+| `WORKER_URL` | ya | - | Mis. `https://livejalur.muidsoft.com` |
+| `LIVE_SECRET` | ya | - | Harus sama dengan secret di Worker |
+| `EULER_API_KEY` (atau `SIGN_API_KEY`) | tidak | kosong | API key Euler Stream |
+| `TARGET_GIFT_NAME` | tidak | semua gift | Nama gift pemicu; kosong atau `*` = semua |
+| `MIN_GIFT_VALUE` | tidak | `1` | Nilai koin minimum (integer >= 0) |
+| `THREE_CARD_MIN_VALUE` | tidak | `5` | Koin minimum untuk spread 3 kartu |
+| `DEFAULT_SPREAD` | tidak | `single` | `single` atau `three-card` |
+| `LIKE_MILESTONE` | tidak | lihat catatan | Setiap N like memicu draw; kosong = nonaktif |
+| `RECONNECT_MIN_MS` / `RECONNECT_MAX_MS` | tidak | `5000` / `60000` | Backoff reconnect |
+| `WORKER_TIMEOUT_MS` | tidak | `10000` | Timeout panggilan ke Worker |
+| `DEBUG_EVENTS` | tidak | nonaktif | `1` = log semua event mentah |
+
+> Catatan `LIKE_MILESTONE`: bila variabel ini tidak di-set sama sekali, kode saat
+> ini menghasilkan `NaN` sehingga fitur nonaktif (bukan default 1000). Di produksi
+> nilainya diatur lewat env, jadi tidak berdampak; isi eksplisit bila ingin aktif.
+
 ---
 
 ## Aturan Penting - Newline & Regex di JS dalam TS Template Literal
@@ -334,11 +406,11 @@ langsung (`python3 -c "..."` baca sebagai `bytes`) - jangan percaya
 tampilan terminal/grep begitu saja, karena bisa menampilkan backslash
 dobel padahal aslinya tunggal (histori debug nyata di rev8).
 
-Catatan tambahan (rev9): masalah yang sama terjadi di
-`tiktok-listener/index.js` pada fungsi `makeTriggerKey()` - lihat catatan
-bug fix di bagian Rev 9 di atas. Kalau menulis template literal yang
-seharusnya interpolasi variabel, jangan pernah escape tanda `$` dengan
-`\$` kecuali memang sengaja mau karakter `$` literal di output.
+Catatan tambahan (rev9): masalah yang sama pernah terjadi di listener lama
+pada fungsi `makeTriggerKey()` - lihat catatan bug fix di bagian Rev 9 di atas.
+Kalau menulis template literal yang seharusnya interpolasi variabel, jangan
+pernah escape tanda `$` dengan `\$` kecuali memang sengaja mau karakter `$`
+literal di output.
 
 ---
 
@@ -363,7 +435,7 @@ lib/daily.ts                -> lib/types, lib/cards
 lib/draw.ts                  -> lib/cards, lib/types
 lib/config.ts                 -> (legacy, standalone, hanya dipakai /admin/health)
 
-tiktok-listener/index.js -> tiktok-live-connector, dotenv (proyek Node.js terpisah, TIDAK di-bundle ke Worker)
+tiktok-listener/index.js -> @eulerstream/euler-websocket-sdk, ws, dotenv (proyek Node.js terpisah, TIDAK di-bundle ke Worker)
 ```
 
 ---
@@ -371,7 +443,7 @@ tiktok-listener/index.js -> tiktok-live-connector, dotenv (proyek Node.js terpis
 ## Deploy
 
 Lihat juga `DEPLOY.md` untuk panduan step-by-step lengkap (sudah ditulis
-ulang di rev9 supaya sesuai arsitektur statis saat ini, tanpa OpenRouter).
+ulang di rev9 sesuai arsitektur statis saat ini, tanpa OpenRouter).
 
 ```bash
 # Set secrets (sekali saja, atau saat ganti)
@@ -388,16 +460,26 @@ wrangler tail
 # lihat tiktok-listener/README.md, RENDER-SETUP.md untuk Render)
 cd tiktok-listener
 npm install
-cp .env.example .env   # isi LIVE_SECRET sama dengan di atas
+cp .env.example .env   # isi TIKTOK_USERNAME, WORKER_URL, LIVE_SECRET (sama dengan di atas)
 npm start
+```
+
+Uji cepat tanpa TikTok (setelah deploy):
+
+```bash
+curl -X POST https://livejalur.muidsoft.com/api/live/trigger \
+  -H "X-Live-Secret: $LIVE_SECRET" -H "Content-Type: application/json" \
+  -d '{"username":"test","giftName":"Rose","giftCount":1,"spreadId":"three-card"}'
+# lalu buka /live dalam 45 detik; pastikan teks ramalan tidak berisi karakter aneh
 ```
 
 ---
 
 ## Known Limitations
 
-1. **`tiktok-live-connector` bukan API resmi** - reverse-engineering pihak
-   ketiga, bisa berhenti bekerja kalau TikTok mengubah sistem internalnya.
+1. **Euler Stream adalah layanan pihak ketiga, bukan API resmi TikTok** -
+   ketersediaan, batas koneksi (close code 4429) dan skema event mengikuti
+   Euler; bisa berubah kapan saja.
 2. **Bot TikTok listener harus tetap nyala manual** selama live kalau pakai
    Termux (perlu `termux-wake-lock` + `tmux`/`pm2` agar tidak mati saat
    layar terkunci). Bisa dihindari dengan menjalankan listener di
@@ -406,7 +488,7 @@ npm start
 3. **`live:current` cuma menyimpan 1 draw terakhir** - kalau dua gift target
    masuk hampir bersamaan, overlay cuma menampilkan yang paling baru
    (draw sebelumnya langsung tertimpa).
-4. **Overlay polling, bukan WebSocket** - delay kira-kira 2 detik antara
+4. **Overlay polling, bukan WebSocket** - delay kira-kira 1 detik antara
    trigger dan tampil di layar; cukup untuk kebutuhan live biasa tapi
    bukan realtime instan.
 5. **Bundle size** - `cards.ts` + `enrichedMeanings.ts` + `liveAspectMeanings.ts`
@@ -420,3 +502,10 @@ npm start
    fungsi `getAdminPassword`). Wajib set `wrangler secret put
    ADMIN_PASSWORD` sebelum live/production sungguhan supaya admin panel
    tidak bisa diakses orang lain.
+8. **Filter gift streak belum terverifikasi**: nama field `giftType` dan
+   `repeatEnd` diasumsikan dari skema TikTok/Euler. Jika tidak cocok, filter
+   tidak aktif (perilaku lama) dan satu streak bisa memicu beberapa draw.
+   Verifikasi dengan `DEBUG_EVENTS=1` saat ada gift streak.
+9. **Jam server menentukan kesegaran draw**: `/api/live/state` menyembunyikan
+   draw > 45 detik. Bila `HIDE_AFTER_MS` di overlay diubah, ubah juga
+   `LIVE_STATE_MAX_AGE_MS` di `routes/live.ts`.
