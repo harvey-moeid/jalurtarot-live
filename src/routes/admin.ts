@@ -5,7 +5,7 @@ import type { AdminEnv } from '../middleware/adminAuth';
 import { adminAuth, getAdminPassword, isLoginRateLimited, recordFailedLogin, clearLoginFailures, createAdminSession, destroyAdminSession } from '../middleware/adminAuth';
 
 const admin = new Hono<{ Bindings: AdminEnv }>();
-admin.use('*', adminAuth);
+admin.use('*', adminAuth as any);
 
 
 
