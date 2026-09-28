@@ -874,7 +874,7 @@ export function generateDailyInterpretation(
   const orientation = isReversed ? 'terbalik' : 'normal';
   const keywords = isReversed ? card.keywords.reversed : card.keywords.upright;
   const meaning = isReversed ? card.meaning.reversed : card.meaning.upright;
-  const kwStr = keywords.slice(0, 4).join(' · ');
+  const kwStr = keywords.slice(0, 4).join(' Â· ');
 
   const enriched = getEnrichedMeaning(card.id);
   const deepMeaning = enriched ? (isReversed ? enriched.reversedDeep : enriched.uprightDeep) : meaning;

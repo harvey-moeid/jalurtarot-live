@@ -84,7 +84,7 @@ export function dailyPage(tz: string = 'Asia/Jakarta'): string {
             <div>
               <h2 id="card-name" class="font-heading text-bone" style="font-size:1.6rem;letter-spacing:0.12em;">${draw.card.nameCn}</h2>
               <p id="card-subname" class="font-body text-bone-faint" style="font-size:0.9rem;font-style:italic;margin-top:0.25rem;">
-                ${draw.card.name} · ${draw.isReversed ? 'Terbalik' : 'Normal'}
+                ${draw.card.name} Â· ${draw.isReversed ? 'Terbalik' : 'Normal'}
               </p>
             </div>
           </div>
@@ -337,7 +337,7 @@ export function dailyPage(tz: string = 'Asia/Jakarta'): string {
           }
 
           document.getElementById('card-name').textContent    = d.card.nameCn;
-          document.getElementById('card-subname').textContent = d.card.name + ' · ' + (d.isReversed ? 'Terbalik' : 'Normal');
+          document.getElementById('card-subname').textContent = d.card.name + ' Â· ' + (d.isReversed ? 'Terbalik' : 'Normal');
           const kws = d.isReversed ? d.card.keywords.reversed : d.card.keywords.upright;
           document.getElementById('card-keywords').innerHTML = kws.slice(0, 5).map(k =>
             '<span class="font-heading text-gold-dim chip-gold" role="listitem" style="font-size:9.5px;letter-spacing:0.15em;">' + k + '</span>'
@@ -449,11 +449,11 @@ export function dailyPage(tz: string = 'Asia/Jakarta'): string {
       const dateStr    = new Date(currentDraw.dateKey + 'T00:00:00').toLocaleDateString('id-ID', {
         weekday:'long', day:'numeric', month:'long', year:'numeric',
       });
-      const kws  = (isReversed ? card.keywords.reversed : card.keywords.upright).slice(0, 4).join(' · ');
+      const kws  = (isReversed ? card.keywords.reversed : card.keywords.upright).slice(0, 4).join(' Â· ');
       const note = document.getElementById('daily-note').value.trim();
       const lines = [
         'Jalur Tarot — Kartu Harian', dateStr, '',
-        card.nameCn + ' (' + card.name + ')' + (isReversed ? ' · Terbalik' : ''),
+        card.nameCn + ' (' + card.name + ')' + (isReversed ? ' Â· Terbalik' : ''),
         'Kata kunci: ' + kws,
       ];
       if (currentInterpretation) {

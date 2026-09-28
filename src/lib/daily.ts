@@ -1,7 +1,7 @@
 /**
- * Daily card · 每日一牌的确定性抽取
+ * Daily card Â· æ¯æ¥ä¸ççç¡®å®æ§æ½å
  *
- * 给定同一天，所有用户得到同一张牌（含正逆位）。
+ * ç»å®åä¸å¤©ï¼ææç¨æ·å¾å°åä¸å¼ çï¼å«æ­£éä½ï¼ã
  * 用本地时区的日期作 seed —— 让"今天"的边界与用户感知一致。
  */
 
@@ -10,7 +10,7 @@ import { allCards } from './cards';
 
 const SEED_PREFIX = 'mystic-tarot-daily-v1';
 
-/** YYYY-MM-DD（本地时区） */
+/** YYYY-MM-DDï¼æ¬å°æ¶åºï¼ */
 export function formatDateKey(date: Date): string {
   const y = date.getFullYear();
   const m = String(date.getMonth() + 1).padStart(2, '0');
@@ -28,8 +28,8 @@ export function parseDateKey(key: string): Date | null {
 }
 
 /**
- * djb2 字符串哈希 · 32-bit 无符号
- * 足够稳定且分布均匀，用于把日期映射到 0..N
+ * djb2 å­ç¬¦ä¸²åå¸ Â· 32-bit æ ç¬¦å·
+ * è¶³å¤ç¨³å®ä¸åå¸ååï¼ç¨äºææ¥ææ å°å° 0..N
  */
 function djb2(input: string): number {
   let h = 5381;
@@ -47,14 +47,14 @@ export interface DailyDraw {
 }
 
 /**
- * 给定日期返回当日的塔罗牌（含正逆位）。
+ * ç»å®æ¥æè¿åå½æ¥çå¡ç½çï¼å«æ­£éä½ï¼ã
  * 同一天 → 同一张牌。
  */
 export function getDailyDraw(date: Date = new Date()): DailyDraw {
   const dateKey = formatDateKey(date);
   const seed = djb2(`${SEED_PREFIX}|${dateKey}`);
   const cardIdx = seed % allCards.length;
-  // 用 seed 的另一段位决定正逆位，避免与卡牌选择强相关
+  // ç¨ seed çå¦ä¸æ®µä½å³å®æ­£éä½ï¼é¿åä¸å¡çéæ©å¼ºç¸å³
   const isReversed = (((seed >>> 16) ^ (seed >>> 8)) & 1) === 1;
   return {
     card: allCards[cardIdx],
@@ -64,8 +64,8 @@ export function getDailyDraw(date: Date = new Date()): DailyDraw {
 }
 
 /**
- * 生成"过去 N 天"的每日牌列表（含今天，今天在最前）。
- * 用于"轨迹"视图。
+ * çæ"è¿å» N å¤©"çæ¯æ¥çåè¡¨ï¼å«ä»å¤©ï¼ä»å¤©å¨æåï¼ã
+ * ç¨äº"è½¨è¿¹"è§å¾ã
  */
 export function getRecentDailyDraws(days: number, end: Date = new Date()): DailyDraw[] {
   const out: DailyDraw[] = [];

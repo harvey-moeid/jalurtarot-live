@@ -1,5 +1,5 @@
 /**
- * Draw functions · Pure, no side-effects, no React dependency.
+ * Draw functions Â· Pure, no side-effects, no React dependency.
  * FIX IMP-4: Replaced biased sort-shuffle with Fisher-Yates algorithm.
  */
 
