@@ -11,6 +11,15 @@ import live, { liveOverlayPage, type LiveEnv } from './routes/live';
 
 const app = new Hono<{ Bindings: LiveEnv }>();
 
+app.use('*', async (c, next) => {
+  await next();
+  c.header('X-Content-Type-Options', 'nosniff');
+  c.header('Referrer-Policy', 'strict-origin-when-cross-origin');
+  c.header('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+  c.header('X-Frame-Options', 'SAMEORIGIN');
+  if (c.req.path.startsWith('/admin')) c.header('Cache-Control', 'no-store');
+});
+
 // ── API routes ──
 app.route('/api', api);
 
