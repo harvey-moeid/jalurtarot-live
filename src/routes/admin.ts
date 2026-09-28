@@ -994,7 +994,8 @@ admin.post('/live/test-draw', async (c) => {
   const giftName = (body['giftName'] as string || '').trim() || undefined;
 
   const draw = generateLiveDraw(spreadId, username, giftName, giftName ? 1 : undefined);
-  await saveLiveDraw(c.env, draw);
+  const saved = await saveLiveDraw(c.env, draw);
+  if (!saved) return c.redirect('/admin/live?msg=Gagal+menyimpan+draw+ke+KV&type=error');
 
   return c.redirect('/admin/live?msg=Kartu+berhasil+ditarik&type=success');
 });
