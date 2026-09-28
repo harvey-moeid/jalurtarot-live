@@ -522,13 +522,8 @@ admin.get('/login', (c) => {
   <div class="login-box">
     <h1>[tarot] Admin Panel</h1>
     <p class="sub">JalurTarot - Area Terbatas</p>
-    ${error && hint ? `
-    <div class="alert alert-warn">
-      [!] <strong>ADMIN_PASSWORD belum diset.</strong><br>
-      Jalankan: <code>wrangler secret put ADMIN_PASSWORD</code><br>
-      Atau gunakan password default: <code>changeme</code>
-    </div>` : error ? `
-    <div class="alert alert-error">[!] Password salah. Coba lagi.</div>` : ''}
+    ${error ? `
+    <div class="alert alert-error">[!] Password salah atau konfigurasi admin belum lengkap.</div>` : ''}
     <form method="POST" action="/admin/login">
       <label>PASSWORD</label>
       <div class="pw-wrap">
