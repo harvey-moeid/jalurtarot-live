@@ -8,8 +8,27 @@ export type LiveEnv = ApiEnv & {
 
 const live = new Hono<{ Bindings: LiveEnv }>();
 
+// Draw yang lebih tua dari ini tidak dikirim lagi oleh /state. Disamakan dengan
+// HIDE_AFTER_MS di overlay (45 detik): draw selebar itu memang sudah disembunyikan,
+// jadi tidak ada yang hilang dari alur normal. Yang dicegah: overlay yang dibuka /
+// di-refresh menampilkan draw lama (KV menyimpannya sampai 6 jam).
+// Memakai jam server (bukan jam browser) supaya tidak terpengaruh jam perangkat.
+const LIVE_STATE_MAX_AGE_MS = 45_000;
+
 function isValidSpreadId(value: unknown): value is LiveSpreadId {
   return value === 'single' || value === 'three-card';
+}
+
+// Perbandingan string tanpa short-circuit (waktu tidak bergantung pada posisi
+// karakter pertama yang berbeda), supaya secret tidak bisa ditebak lewat timing.
+function safeEqual(a: string, b: string): boolean {
+  const enc = new TextEncoder();
+  const ea = enc.encode(a);
+  const eb = enc.encode(b);
+  let diff = ea.length ^ eb.length;
+  const n = Math.max(ea.length, eb.length);
+  for (let i = 0; i < n; i++) diff |= (ea[i] ?? 0) ^ (eb[i] ?? 0);
+  return diff === 0;
 }
 
 // POST /api/live/trigger
@@ -25,7 +44,7 @@ live.post('/trigger', async (c) => {
     );
   }
 
-  if (!givenSecret || givenSecret !== expectedSecret) {
+  if (!givenSecret || !safeEqual(givenSecret, expectedSecret)) {
     return c.json({ error: 'Unauthorized - X-Live-Secret salah atau kosong' }, 401);
   }
 
@@ -48,16 +67,19 @@ live.post('/trigger', async (c) => {
 });
 
 // GET /api/live/state
-// Polled by the OBS/browser overlay.
+// Polled by the OBS/browser overlay. Hanya mengembalikan draw yang masih "segar"
+// (lihat LIVE_STATE_MAX_AGE_MS); selain itu { draw: null }.
 live.get('/state', async (c) => {
   const draw = await getLiveDraw(c.env);
-  return c.json({ draw });
+  const fresh = draw && Date.now() - draw.createdAt <= LIVE_STATE_MAX_AGE_MS ? draw : null;
+  c.header('Cache-Control', 'no-store');
+  return c.json({ draw: fresh });
 });
 
 export default live;
 
 // GET /live
-// Transparent overlay for OBS Browser Source.
+// Overlay layar penuh (portrait & landscape) untuk OBS Browser Source / perangkat.
 export function liveOverlayPage(): string {
   return `<!DOCTYPE html>
 <html lang="id">

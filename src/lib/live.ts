@@ -1,26 +1,30 @@
 /**
- * live.ts — Mesin "Ramalan Live" untuk siaran TikTok Live.
+ * live.ts - Mesin "Ramalan Live" untuk siaran TikTok Live.
  *
  * 100% lokal, tanpa AI/LLM. Kartu ditarik dengan Fisher-Yates (draw.ts),
  * maknanya diambil dari data statis di repo:
- *   - lib/cards.ts             — nama, gambar, keyword upright/reversed
- *   - lib/liveAspectMeanings.ts — makna 3 aspek (Hubungan/Karir/Nasib)
+ *   - lib/cards.ts              - nama, gambar, keyword upright/reversed
+ *   - lib/liveAspectMeanings.ts - makna 3 aspek (Hubungan/Karir/Nasib)
  *     yang diambil langsung dari arti-tarot-78-rider-waite.md yang di-upload.
  *
  * Alur:
- *  1. Bot pendengar TikTok Live (Node.js, berjalan terpisah di Termux/HP)
- *     mendeteksi gift target — panggil POST /api/live/trigger dengan header
- *     rahasia (X-Live-Secret).
+ *  1. Bot pendengar TikTok Live (Node.js, berjalan terpisah: Termux/Render/VPS)
+ *     mendeteksi gift target, lalu memanggil POST /api/live/trigger dengan
+ *     header rahasia (X-Live-Secret).
  *  2. Worker menarik kartu, menyusun teks ramalan singkat, menyimpannya
  *     di KV sebagai "draw" terbaru.
- *  3. Halaman overlay (/live) di-buka sebagai Browser Source OBS,
- *     polling GET /api/live/state tiap ~2 detik dan menampilkan draw baru.
+ *  3. Halaman overlay (/live) dibuka sebagai Browser Source OBS,
+ *     polling GET /api/live/state tiap ~1 detik dan menampilkan draw baru.
  *
- * Catatan ikon (rev10): summary tidak lagi memakai emoji unicode langsung
+ * Catatan ikon (rev10): summary tidak memakai emoji unicode langsung
  * (render berbeda-beda antar OS/font, kadang tampil kotak/hitam-putih di OBS).
  * Sebagai gantinya dipakai token teks polos `::nama-ikon::` yang di-parse
- * jadi <svg> inline oleh skrip overlay di routes/live.ts (fungsi icon()).
+ * jadi <svg> inline oleh skrip overlay di routes/live.ts (fungsi md()).
  * Token yang dipakai: ::spark:: ::heart:: ::briefcase:: ::crystal::
+ *
+ * Catatan encoding: file ini sengaja hanya memakai karakter ASCII. Versi
+ * sebelumnya berisi karakter non-ASCII (tanda pisah, titik tengah) yang tampil
+ * sebagai mojibake ("a^", "A.") di teks ramalan yang dilihat penonton.
  */
 
 import { drawCardsForSpread } from './draw';
@@ -54,7 +58,7 @@ export interface LiveDraw {
 }
 
 const STATE_KEY = 'live:current';
-const STATE_TTL_SECONDS = 6 * 60 * 60; // 6 jam — cukup untuk satu sesi live
+const STATE_TTL_SECONDS = 6 * 60 * 60; // 6 jam - cukup untuk satu sesi live
 
 function buildCardView(dc: DrawnCard): LiveCardView {
   const aspect = liveAspectMeanings[dc.card.id] || {
@@ -75,24 +79,25 @@ function buildCardView(dc: DrawnCard): LiveCardView {
 }
 
 /**
- * Susun ringkasan ramalan singkat — cocok untuk teks overlay live, bukan bacaan panjang.
+ * Susun ringkasan ramalan singkat - cocok untuk teks overlay live, bukan bacaan panjang.
  * Ikon ditulis sebagai token `::nama::` (bukan emoji unicode), di-render jadi SVG
- * inline oleh overlay (lihat fungsi icon() di routes/live.ts, liveOverlayPage()).
+ * inline oleh overlay (lihat fungsi md() di routes/live.ts, liveOverlayPage()).
  */
 function buildSummary(cards: LiveCardView[], spreadId: LiveSpreadId, username: string): string {
   const nama = username?.trim() || 'Kamu';
 
   if (spreadId === 'single') {
     const c = cards[0];
-    const posisi = c.isReversed ? '(terbalik)' : '';
-    return `::spark:: Ramalan untuk ${nama}\n\n**${c.nameCn} ${posisi}**\nKata kunci: ${c.keywords.join(', ')}\n\n::heart:: Hubungan: ${c.aspect.hubungan}\n::briefcase:: Karir: ${c.aspect.karir}\n::crystal:: Nasib: ${c.aspect.nasib}`;
+    // Spasi hanya ditambahkan bila terbalik, supaya tidak ada spasi sisa di dalam ** **.
+    const judul = `${c.nameCn}${c.isReversed ? ' (terbalik)' : ''}`;
+    return `::spark:: Ramalan untuk ${nama}\n\n**${judul}**\nKata kunci: ${c.keywords.join(', ')}\n\n::heart:: Hubungan: ${c.aspect.hubungan}\n::briefcase:: Karir: ${c.aspect.karir}\n::crystal:: Nasib: ${c.aspect.nasib}`;
   }
 
   const [past, present, future] = cards;
   const line = (c: LiveCardView, label: string) =>
-    `**${label} — ${c.nameCn}${c.isReversed ? ' (terbalik)' : ''}**\n::crystal:: ${c.aspect.nasib}`;
+    `**${label} - ${c.nameCn}${c.isReversed ? ' (terbalik)' : ''}**\n::crystal:: ${c.aspect.nasib}`;
 
-  return `::spark:: Ramalan Masa Lalu · Kini · Masa Depan untuk ${nama}\n\n${line(past, 'Masa Lalu')}\n\n${line(present, 'Saat Ini')}\n\n${line(future, 'Masa Depan')}`;
+  return `::spark:: Ramalan Masa Lalu - Kini - Masa Depan untuk ${nama}\n\n${line(past, 'Masa Lalu')}\n\n${line(present, 'Saat Ini')}\n\n${line(future, 'Masa Depan')}`;
 }
 
 export function generateLiveDraw(
@@ -124,7 +129,7 @@ export async function saveLiveDraw(env: { RATE_LIMIT_KV: KVNamespace }, draw: Li
       expirationTtl: STATE_TTL_SECONDS,
     });
   } catch {
-    /* fail open — overlay cukup tidak dapat update baru */
+    /* fail open - overlay cukup tidak dapat update baru */
   }
 }
 
