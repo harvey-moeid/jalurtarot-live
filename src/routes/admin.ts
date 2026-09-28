@@ -84,21 +84,6 @@ function esc(str: string | undefined | null): string {
     .replace(/'/g, '&#39;');
 }
 
-// -- Ambil semua credit keys dari KV --
-async function listCreditKeys(env: AdminEnv): Promise<Array<{ ip: string; state: CreditState; blacklisted: boolean }>> {
-  try {
-    const list = await env.RATE_LIMIT_KV.list({ prefix: 'credit:' });
-    const results = [];
-    for (const key of list.keys) {
-      const ip = key.name.replace('credit:', '');
-      const state = await readCreditState(env, ip);
-      const blacklisted = await isBlacklisted(env, ip);
-      results.push({ ip, state, blacklisted });
-    }
-    return results;
-  } catch { return []; }
-}
-
 // ======================================
 // -- HTML HELPERS --
 // ======================================
