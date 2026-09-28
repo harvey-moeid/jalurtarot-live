@@ -1,87 +1,20 @@
-// @ts-nocheck
 import { Hono } from 'hono';
 import type { Env } from './api';
 import { getLLMConfig, setLLMConfig } from '../lib/config';
 import { generateLiveDraw, saveLiveDraw, getLiveDraw, type LiveSpreadId } from '../lib/live';
 
-// --- Extend Env untuk ADMIN_PASSWORD ---
-// Catatan: field OpenRouter di bawah ini hanya dipertahankan supaya halaman
-// legacy /admin/health & /admin/credits (fitur AI, sudah dimatikan) tetap
-// lolos type-check. Aplikasi utama (api.ts) sudah tidak memakainya lagi -
-// Ramalan Live 100% statis tanpa AI.
-type AdminEnv = Env & {
-  ADMIN_PASSWORD: string;
-  LIVE_SECRET?: string;
-  RENDER_API_KEY?: string;
-  RENDER_LISTENER_SERVICE_ID?: string;
-  RENDER_LISTENER_SERVICE_NAME?: string;
-  ENABLE_FALLBACK_LLM?: string;
-  FALLBACK_LLM_MODEL?: string;
-  OPENROUTER_BASE_URL?: string;
-  OPENROUTER_API_KEY?: string;
-  OPENROUTER_API_KEY_2?: string;
-  OPENROUTER_API_KEY_3?: string;
-  OPENROUTER_API_KEY_4?: string;
-  OPENROUTER_API_KEY_5?: string;
-};
+import type { AdminEnv } from '../middleware/adminAuth';
+import { adminAuth, getCookie, isLoginRateLimited, recordFailedLogin, clearLoginFailures } from '../middleware/adminAuth';
 
-// Admin has a large route surface; keep Hono's route generic from exploding during tsc.
-const admin = new Hono<any>();
+const admin = new Hono<{ Bindings: AdminEnv }>();
+admin.use('*', adminAuth);
 
-// Login/logout are public; every other /admin route requires a live KV-backed session.
-admin.use('*', async (c, next) => {
-  const path = c.req.path;
-  if (path === '/login' || path === '/logout') {
-    await next();
-    return;
-  }
-  if (!(await isAuthenticated(c))) return c.redirect('/admin/login');
-  await next();
-});
+
+
 
 // ======================================
 // -- AUTH HELPERS --
 // ======================================
-
-const ADMIN_SESSION_TTL_SECONDS = 8 * 60 * 60;
-const ADMIN_LOGIN_WINDOW_SECONDS = 15 * 60;
-const ADMIN_LOGIN_MAX_ATTEMPTS = 8;
-
-function getAdminPassword(c: any): string | null {
-  const pwd = c.env.ADMIN_PASSWORD;
-  if (!pwd || typeof pwd !== 'string' || pwd.trim() === '') return null;
-  return pwd.trim();
-}
-
-function getCookie(c: any, name: string): string | null {
-  const parts = (c.req.header('Cookie') || '').split(';');
-  for (const part of parts) {
-    const [key, ...rest] = part.trim().split('=');
-    if (key === name) return decodeURIComponent(rest.join('='));
-  }
-  return null;
-}
-
-function getClientIp(c: any): string {
-  return (c.req.header('CF-Connecting-IP') || c.req.header('X-Forwarded-For') || 'unknown').split(',')[0].trim().slice(0, 100);
-}
-
-async function isAuthenticated(c: any): Promise<boolean> {
-  const token = getCookie(c, 'admin_token');
-  if (!token) return false;
-  try {
-    const raw = await c.env.RATE_LIMIT_KV.get('admin:session:' + token);
-    if (!raw) return false;
-    const session = JSON.parse(raw) as { expiresAt?: number };
-    if (!session.expiresAt || Date.now() >= session.expiresAt) {
-      await c.env.RATE_LIMIT_KV.delete('admin:session:' + token);
-      return false;
-    }
-    return true;
-  } catch {
-    return false;
-  }
-}
 
 // -- RENDER LISTENER CONTROL --
 const DEFAULT_RENDER_LISTENER_NAME = 'jalurtarot-tiktok-listener';
