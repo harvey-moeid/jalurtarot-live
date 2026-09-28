@@ -26,6 +26,14 @@ type AdminEnv = Env & {
 
 const admin = new Hono<{ Bindings: AdminEnv }>();
 
+// Login/logout are public; every other /admin route requires a live KV-backed session.
+admin.use('*', async (c, next) => {
+  const path = c.req.path;
+  if (path === '/login' || path === '/logout') return next();
+  if (!(await isAuthenticated(c))) return c.redirect('/admin/login');
+  await next();
+});
+
 // ======================================
 // -- AUTH HELPERS --
 // ======================================
@@ -68,32 +76,6 @@ async function isAuthenticated(c: any): Promise<boolean> {
   } catch {
     return false;
   }
-}
-
-async function requireAuth(c: any): Promise<Response | null> {
-  if (!(await isAuthenticated(c))) return c.redirect('/admin/login');
-  return null;
-}
-
-async function isLoginRateLimited(c: any): Promise<boolean> {
-  try {
-    const raw = await c.env.RATE_LIMIT_KV.get('admin:login:' + getClientIp(c));
-    return Number(raw || 0) >= ADMIN_LOGIN_MAX_ATTEMPTS;
-  } catch {
-    return false;
-  }
-}
-
-async function recordFailedLogin(c: any): Promise<void> {
-  try {
-    const key = 'admin:login:' + getClientIp(c);
-    const count = Number(await c.env.RATE_LIMIT_KV.get(key) || 0) + 1;
-    await c.env.RATE_LIMIT_KV.put(key, String(count), { expirationTtl: ADMIN_LOGIN_WINDOW_SECONDS });
-  } catch {}
-}
-
-async function clearLoginFailures(c: any): Promise<void> {
-  try { await c.env.RATE_LIMIT_KV.delete('admin:login:' + getClientIp(c)); } catch {}
 }
 
 // -- RENDER LISTENER CONTROL --
@@ -806,9 +788,6 @@ admin.post('/logout', async (c) => {
 // ======================================
 
 admin.get('/', async (c) => {
-  const authErr = await requireAuth(c);
-  if (authErr) return authErr;
-
   const entries = await listCreditKeys(c.env);
   const banner = await getBanner(c.env);
 
@@ -921,9 +900,6 @@ admin.get('/', async (c) => {
 // ======================================
 
 admin.get('/credits', async (c) => {
-  const authErr = await requireAuth(c);
-  if (authErr) return authErr;
-
   const entries = await listCreditKeys(c.env);
   const msg = c.req.query('msg');
   const msgType = c.req.query('type') || 'success';
@@ -1049,9 +1025,6 @@ admin.get('/credits', async (c) => {
 
 // POST /admin/credits/adjust
 admin.post('/credits/adjust', async (c) => {
-  const authErr = await requireAuth(c);
-  if (authErr) return authErr;
-
   const body = await c.req.parseBody();
   const ip = (body['ip'] as string || '').trim();
   const amount = parseInt(body['amount'] as string || '0', 10);
@@ -1072,9 +1045,6 @@ admin.post('/credits/adjust', async (c) => {
 
 // POST /admin/credits/reset
 admin.post('/credits/reset', async (c) => {
-  const authErr = await requireAuth(c);
-  if (authErr) return authErr;
-
   const body = await c.req.parseBody();
   const ip = (body['ip'] as string || '').trim();
   const redirectTo = (body['redirect'] as string) || '/admin/credits';
@@ -1100,9 +1070,6 @@ admin.post('/credits/reset', async (c) => {
 // ======================================
 
 admin.get('/health', async (c) => {
-  const authErr = await requireAuth(c);
-  if (authErr) return authErr;
-
   // Baca config LLM dari KV (bisa diedit dari admin panel ini)
   const llmCfg = await getLLMConfig(c.env);
   const model = llmCfg.model;
@@ -1326,9 +1293,6 @@ wrangler secret put OPENROUTER_API_KEY_3</pre>
 
 // -- POST /admin/config/model - simpan model ke KV --
 admin.post('/config/model', async (c) => {
-  const authErr = await requireAuth(c);
-  if (authErr) return authErr;
-
   const body = await c.req.parseBody();
   // Jika custom diisi, custom override dropdown
   const custom = ((body['custom_model'] as string) || '').trim();
@@ -1353,9 +1317,6 @@ admin.post('/config/model', async (c) => {
 
 // -- POST /admin/config/llm-toggle - aktif/nonaktifkan LLM --
 admin.post('/config/llm-toggle', async (c) => {
-  const authErr = await requireAuth(c);
-  if (authErr) return authErr;
-
   const body = await c.req.parseBody();
   const enabledStr = (body['enabled'] as string || '').trim();
   const enabled = enabledStr === 'true';
@@ -1374,9 +1335,6 @@ admin.post('/config/llm-toggle', async (c) => {
 // ======================================
 
 admin.get('/banner', async (c) => {
-  const authErr = await requireAuth(c);
-  if (authErr) return authErr;
-
   const banner = await getBanner(c.env);
   const msg = c.req.query('msg');
   const msgType = c.req.query('type') || 'success';
@@ -1448,9 +1406,6 @@ admin.get('/banner', async (c) => {
 
 // POST /admin/banner/set
 admin.post('/banner/set', async (c) => {
-  const authErr = await requireAuth(c);
-  if (authErr) return authErr;
-
   const body = await c.req.parseBody();
   const text = (body['text'] as string || '').trim();
   const type = (body['type'] as string || 'info').trim();
@@ -1468,9 +1423,6 @@ admin.post('/banner/set', async (c) => {
 
 // POST /admin/banner/deactivate
 admin.post('/banner/deactivate', async (c) => {
-  const authErr = await requireAuth(c);
-  if (authErr) return authErr;
-
   try {
     await c.env.RATE_LIMIT_KV.delete('banner:active');
     return c.redirect('/admin/banner?msg=Banner+berhasil+dinonaktifkan&type=success');
@@ -1484,9 +1436,6 @@ admin.post('/banner/deactivate', async (c) => {
 // ======================================
 
 admin.get('/blacklist', async (c) => {
-  const authErr = await requireAuth(c);
-  if (authErr) return authErr;
-
   const msg = c.req.query('msg');
   const msgType = c.req.query('type') || 'success';
 
@@ -1566,9 +1515,6 @@ admin.get('/blacklist', async (c) => {
 
 // POST /admin/blacklist/add
 admin.post('/blacklist/add', async (c) => {
-  const authErr = await requireAuth(c);
-  if (authErr) return authErr;
-
   const body = await c.req.parseBody();
   const ip = (body['ip'] as string || '').trim();
   const reason = (body['reason'] as string || '').trim();
@@ -1587,9 +1533,6 @@ admin.post('/blacklist/add', async (c) => {
 
 // POST /admin/blacklist/remove
 admin.post('/blacklist/remove', async (c) => {
-  const authErr = await requireAuth(c);
-  if (authErr) return authErr;
-
   const body = await c.req.parseBody();
   const ip = (body['ip'] as string || '').trim();
   const redirectTo = (body['redirect'] as string) || '/admin/blacklist';
@@ -1721,9 +1664,6 @@ admin.post('/live/render/stop', async (c) => {
 });
 
 admin.post('/live/test-draw', async (c) => {
-  const authErr = await requireAuth(c);
-  if (authErr) return authErr;
-
   const body = await c.req.parseBody();
   const spreadId: LiveSpreadId = body['spreadId'] === 'three-card' ? 'three-card' : 'single';
   const username = (body['username'] as string || '@tester').trim() || '@tester';
