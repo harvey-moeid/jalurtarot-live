@@ -31,8 +31,14 @@ persist = true
 head_sampling_rate = 1
 
 [vars]
-# Tidak ada var publik yang dibutuhkan lagi — Ramalan Live 100% offline/statis,
-# tanpa AI/LLM, tanpa API key eksternal.
+# Base URL aman untuk dipublikkan; API key tetap Cloudflare Secret.
+TIKTOK_CONNECTOR_URL = "https://tiktok-live-konektor.onrender.com"
+
+# Filter gift untuk Ramalan Live. "*" = semua gift.
+LIVE_TARGET_GIFT_NAME = "*"
+LIVE_MIN_GIFT_VALUE = "1"
+LIVE_THREE_CARD_MIN_VALUE = "5"
+LIVE_DEFAULT_SPREAD = "single"
 
 # —— Admin Panel ——
 # Password untuk halaman /admin — simpan sebagai secret, JANGAN di sini.
@@ -40,10 +46,15 @@ head_sampling_rate = 1
 #   wrangler secret put ADMIN_PASSWORD          → Password admin panel (WAJIB sebelum deploy)
 #
 # —— Ramalan Live (TikTok) ——
-# Token rahasia yang harus dikirim bot Node.js (tiktok-listener/) di header
-# X-Live-Secret setiap kali memanggil POST /api/live/trigger. Isi bebas,
-# cukup panjang & acak (contoh: buat dengan `openssl rand -hex 24`).
+# Jalur utama memakai API dari repo tiktok-live-konektor.
 #
-#   wrangler secret put LIVE_SECRET             → Token rahasia trigger live (WAJIB untuk fitur live)
+#   wrangler secret put TIKTOK_CONNECTOR_API_KEY
+#     -> harus sama dengan API_KEY pada service tiktok-live-konektor.
 #
-# Untuk dev lokal: taruh ADMIN_PASSWORD + LIVE_SECRET di file .dev.vars (jangan di-commit!)
+#   wrangler secret put TIKTOK_CONNECTOR_WEBHOOK_SECRET
+#     -> token acak untuk POST /api/live/connector-webhook?secret=...
+#
+# LIVE_SECRET tetap didukung hanya untuk endpoint legacy POST /api/live/trigger.
+# Tidak perlu dipakai bila integrasi connector baru sudah aktif.
+#
+# Untuk dev lokal: taruh secret di file .dev.vars (jangan di-commit!).
