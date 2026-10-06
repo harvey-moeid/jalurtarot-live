@@ -2,7 +2,7 @@
 
 Aplikasi baca tarot berbasis web untuk siaran **TikTok Live** — 100% statis, tanpa AI/LLM, tanpa biaya per-ramalan.
 
-Saat penonton mengirim gift target, bot Node.js memicu Worker → kartu ditarik otomatis → tampil di overlay OBS.
+Saat penonton mengirim gift target, **tiktok-live-konektor** mengirim event ke Worker → kartu ditarik otomatis → tampil di overlay OBS. API key konektor tetap server-side dan tidak ditanam di JavaScript publik.
 
 🔗 **Production:** [jalurtarotfree.muidsoft.com](https://jalurtarotfree.muidsoft.com)
 
@@ -17,7 +17,7 @@ Saat penonton mengirim gift target, bot Node.js memicu Worker → kartu ditarik 
 | Language | TypeScript |
 | Storage | Cloudflare KV (`RATE_LIMIT_KV`) |
 | Static Assets | Cloudflare Static Assets (`./public`) |
-| Bot TikTok | Node.js terpisah (`tiktok-listener/`), via `tiktok-live-connector` |
+| TikTok Realtime | API bersama dari repo `tiktok-live-konektor` (REST + webhook) |
 | Build/Deploy | Wrangler CLI 4.x |
 | CI/CD | GitHub Actions |
 
@@ -80,20 +80,20 @@ Saat penonton mengirim gift target, bot Node.js memicu Worker → kartu ditarik 
 ## Cara Kerja Ramalan Live
 
 ```
-Penonton kirim gift di TikTok Live
+TikTok LIVE @jalurtarot
         ↓
-tiktok-listener/ (Node.js, Termux/VPS)
-        ↓  POST /api/live/trigger  [header: X-Live-Secret]
-Cloudflare Worker
-        ↓  tarik kartu → simpan ke KV live:current (TTL 6 jam)
-GET /api/live/state  (di-poll tiap ~2 detik)
+tiktok-live-konektor (Render)
+        ├─ REST /api/v1/status, /stats, /events
+        └─ webhook gift realtime
+                ↓
+Cloudflare Worker jalurtarot-live
+        ↓  filter gift + dedupe + pilih spread
+tarik kartu → simpan KV live:current
+        ↓
+GET /api/live/state
         ↓
 /live — overlay HTML transparan → OBS Browser Source
 ```
-
-Bot berjalan **terpisah** dari Worker karena `tiktok-live-connector` butuh koneksi Node.js yang persisten — tidak kompatibel dengan Cloudflare Workers runtime. TikTok tidak menyediakan API resmi untuk event live/gift, jadi bot ini memakai library reverse-engineering pihak ketiga dan hanya memanggil Worker lewat HTTP biasa.
-
-Bot mendengar semua gift yang masuk, tapi hanya trigger draw kalau nama gift cocok dengan `TARGET_GIFT_NAME` dan jumlahnya ≥ `MIN_GIFT_COUNT`. Kalau jumlah gift ≥ `THREE_CARD_THRESHOLD`, otomatis menarik 3 kartu (Masa Lalu/Kini/Masa Depan); selain itu 1 kartu saja. Detail lengkap ada di `tiktok-listener/README.md`.
 
 ### Skema data `live:current` (KV)
 
@@ -155,18 +155,24 @@ npm run deploy          # wrangler deploy
 wrangler tail           # pantau logs production
 ```
 
-### 4. Jalankan bot TikTok (Termux/VPS)
+### 4. Sambungkan tiktok-live-konektor
+
+Set secret Worker:
 
 ```bash
-cd tiktok-listener
-npm install
-cp .env.example .env
-# edit .env — isi TIKTOK_USERNAME, WORKER_URL, LIVE_SECRET (sama dengan di Worker),
-# TARGET_GIFT_NAME, MIN_GIFT_COUNT, THREE_CARD_THRESHOLD, dst.
-npm start
+wrangler secret put TIKTOK_CONNECTOR_API_KEY
+wrangler secret put TIKTOK_CONNECTOR_WEBHOOK_SECRET
 ```
 
-Di Termux, jaga bot tetap hidup dengan `termux-wake-lock` + `tmux`/`pm2`. Lihat `tiktok-listener/README.md` untuk panduan setup Termux/VPS lengkap.
+`TIKTOK_CONNECTOR_API_KEY` harus sama dengan `API_KEY` pada service `tiktok-live-konektor`.
+
+Di dashboard `tiktok-live-konektor`, tambahkan webhook event `gift` ke:
+
+```text
+https://DOMAIN-JALURTAROT/api/live/connector-webhook?secret=WEBHOOK_SECRET
+```
+
+Webhook adalah jalur realtime yang disarankan. Bila belum dipasang, overlay memiliki fallback sync gift dari REST API. Folder `tiktok-listener/` dipertahankan hanya sebagai legacy fallback dan bukan lagi dependency utama.
 
 ### 5. Setup OBS
 
@@ -203,17 +209,35 @@ Dependency di-update otomatis lewat `.github/dependabot.yml`.
 ## Environment Variables
 
 ```toml
-# Cloudflare Secrets (wrangler secret put ...)
-ADMIN_PASSWORD    # wajib — password untuk /admin
-LIVE_SECRET       # wajib untuk fitur live — harus sama dengan di tiktok-listener/.env
+# Secret Cloudflare
+ADMIN_PASSWORD
+TIKTOK_CONNECTOR_API_KEY
+TIKTOK_CONNECTOR_WEBHOOK_SECRET
 
-# KV Namespace (sudah terkonfigurasi di wrangler.toml)
-RATE_LIMIT_KV: id = "217d91b266db4ded99680b61b5b0183c"
+# Legacy fallback saja
+LIVE_SECRET
+
+# Vars di wrangler.toml
+TIKTOK_CONNECTOR_URL = "https://tiktok-live-konektor.onrender.com"
+LIVE_TARGET_GIFT_NAME = "*"
+LIVE_MIN_GIFT_VALUE = "1"
+LIVE_THREE_CARD_MIN_VALUE = "5"
+LIVE_DEFAULT_SPREAD = "single"
+
+# KV
+RATE_LIMIT_KV
 ```
 
-Tidak ada variabel publik (`[vars]`) yang wajib — Ramalan Live 100% offline/statis, tanpa AI/LLM, tanpa API key eksternal.
+### API consumer yang tersedia
 
----
+```text
+GET  /api/live/connector/status
+GET  /api/live/connector/stats
+GET  /api/live/connector/events?type=chat,like,gift&limit=50
+POST /api/live/connector-webhook?secret=...
+```
+
+Ketiga endpoint GET memanggil `tiktok-live-konektor` dari Worker dengan bearer API key, jadi credential tidak pernah dikirim ke browser.
 
 ## Storage — KV Keys
 
@@ -295,7 +319,7 @@ Tiga gaya interpretasi untuk `/reading` & `/daily` (Ramalan Live selalu memakai 
 ## Known Limitations
 
 - `tiktok-live-connector` adalah reverse-engineering pihak ketiga — bisa berhenti bekerja jika TikTok mengubah sistem internalnya.
-- Bot TikTok harus tetap nyala manual selama live (gunakan `termux-wake-lock` + `tmux` di Termux, atau `pm2` di VPS).
+- Service `tiktok-live-konektor` harus dalam status Connected saat live. Autostart tidak diwajibkan; START/STOP tetap dikontrol dari dashboard konektor.
 - `live:current` hanya menyimpan 1 draw terakhir — dua gift yang masuk hampir bersamaan hanya menampilkan yang paling baru.
 - Overlay polling tiap ~2 detik — ada delay ±2 detik antara trigger dan tampil di layar.
 - Bundle size — `cards.ts` + `enrichedMeanings.ts` + `liveAspectMeanings.ts` cukup besar, pantau jika mendekati limit 1MB Workers free tier.
