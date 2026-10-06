@@ -57,7 +57,7 @@ async function syncRecentConnectorGifts(env: LiveEnv): Promise<void> {
   if (now - lastConnectorSyncAt < CONNECTOR_SYNC_MIN_INTERVAL_MS) return;
   lastConnectorSyncAt = now;
 
-  connectorSyncPromise = (async () => {
+  const sync = (async () => {
     const payload = await getConnectorEvents(env, 'gift', 20);
     const events = Array.isArray(payload?.events) ? [...payload.events].reverse() : [];
     for (const event of events) {
@@ -68,8 +68,8 @@ async function syncRecentConnectorGifts(env: LiveEnv): Promise<void> {
   })().finally(() => {
     connectorSyncPromise = null;
   });
-
-  return connectorSyncPromise;
+  connectorSyncPromise = sync;
+  return sync;
 }
 
 // POST /api/live/trigger
