@@ -1,6 +1,7 @@
 // @ts-nocheck
 import { Hono } from 'hono';
 import { generateLiveDraw, saveLiveDraw, getLiveDraw, type LiveSpreadId } from '../lib/live';
+import { connectorConfigured, getConnectorStatus } from '../lib/tiktokConnector';
 
 import type { AdminEnv } from '../middleware/adminAuth';
 import { adminAuth, getAdminPassword, isAuthenticated, isLoginRateLimited, recordFailedLogin, clearLoginFailures, createAdminSession, destroyAdminSession, ADMIN_SESSION_TTL_SECONDS } from '../middleware/adminAuth';
@@ -15,40 +16,12 @@ admin.use('*', adminAuth as any);
 // -- AUTH HELPERS --
 // ======================================
 
-// -- RENDER LISTENER CONTROL --
-const DEFAULT_RENDER_LISTENER_NAME = 'jalurtarot-tiktok-listener';
-
-async function renderApiRequest(env: AdminEnv, path: string, options: RequestInit = {}): Promise<any> {
-  const key = (env.RENDER_API_KEY || '').trim();
-  if (!key) throw new Error('RENDER_API_KEY belum di-set di Cloudflare Worker.');
-  const res = await fetch('https://api.render.com/v1' + path, {
-    ...options,
-    headers: { Accept: 'application/json', Authorization: 'Bearer ' + key, ...(options.body ? { 'Content-Type': 'application/json' } : {}), ...(options.headers || {}) },
-  });
-  const body = await res.text();
-  let data: any = null;
-  try { data = body ? JSON.parse(body) : null; } catch { data = body; }
-  if (!res.ok) {
-    const message = typeof data === 'string' ? data.slice(0, 300) : JSON.stringify(data || {}).slice(0, 300);
-    throw new Error('Render API ' + res.status + ': ' + message);
+// -- SHARED TIKTOK CONNECTOR STATUS --
+async function getTikTokConnectorState(env: AdminEnv): Promise<{ ok: boolean; data?: any; error?: string }> {
+  if (!connectorConfigured(env as any)) {
+    return { ok: false, error: 'TIKTOK_CONNECTOR_API_KEY belum di-set.' };
   }
-  return data;
-}
-
-async function getRenderListener(env: AdminEnv): Promise<any> {
-  const serviceId = (env.RENDER_LISTENER_SERVICE_ID || '').trim();
-  if (serviceId) return renderApiRequest(env, '/services/' + encodeURIComponent(serviceId));
-  const name = (env.RENDER_LISTENER_SERVICE_NAME || DEFAULT_RENDER_LISTENER_NAME).trim();
-  const data = await renderApiRequest(env, '/services?name=' + encodeURIComponent(name));
-  const items = Array.isArray(data) ? data : (Array.isArray(data?.items) ? data.items : []);
-  const services = items.map((item: any) => item?.service || item).filter(Boolean);
-  const service = services.find((item: any) => item?.name === name);
-  if (!service?.id) throw new Error('Service Render tidak ditemukan: ' + name);
-  return service;
-}
-
-async function getRenderListenerState(env: AdminEnv): Promise<{ ok: boolean; service?: any; error?: string }> {
-  try { return { ok: true, service: await getRenderListener(env) }; }
+  try { return { ok: true, data: await getConnectorStatus(env as any) }; }
   catch (e: any) { return { ok: false, error: String(e?.message || e) }; }
 }
 
@@ -595,8 +568,8 @@ admin.post('/logout', async (c) => {
 admin.get('/', async (c) => {
   const blacklistedEntries = await listBlacklistEntries(c.env);
   const current = await getLiveDraw(c.env);
-  const renderConfigured = Boolean((c.env as any).RENDER_API_KEY);
-  const liveSecretConfigured = Boolean((c.env as any).LIVE_SECRET);
+  const connectorIsConfigured = connectorConfigured(c.env as any);
+  const webhookConfigured = Boolean((c.env as any).TIKTOK_CONNECTOR_WEBHOOK_SECRET);
 
   const content = `
     <div class="stats-row">
@@ -611,14 +584,14 @@ admin.get('/', async (c) => {
         <div class="stat-sub">${current ? 'draw tersedia' : 'belum ada draw'}</div>
       </div>
       <div class="stat-box">
-        <div class="stat-label">Render Listener</div>
-        <div class="stat-value">${renderConfigured ? 'ON' : 'OFF'}</div>
-        <div class="stat-sub">${renderConfigured ? 'API configured' : 'secret belum di-set'}</div>
+        <div class="stat-label">TikTok API</div>
+        <div class="stat-value">${connectorIsConfigured ? 'ON' : 'OFF'}</div>
+        <div class="stat-sub">${connectorIsConfigured ? 'shared connector aktif' : 'API key belum di-set'}</div>
       </div>
       <div class="stat-box">
-        <div class="stat-label">Live Secret</div>
-        <div class="stat-value">${liveSecretConfigured ? 'ON' : 'OFF'}</div>
-        <div class="stat-sub">trigger listener</div>
+        <div class="stat-label">Webhook</div>
+        <div class="stat-value">${webhookConfigured ? 'ON' : 'OFF'}</div>
+        <div class="stat-sub">push event realtime</div>
       </div>
     </div>
 
@@ -636,7 +609,7 @@ admin.get('/', async (c) => {
       <div class="card-title">Status Sistem</div>
       <p style="font-size:13px;color:var(--text-dim);line-height:1.8;">
         JalurTarot Live berjalan dalam mode lokal/static: kartu dan interpretasi berasal dari data repository.
-        Listener TikTok mengirim trigger terautentikasi ke Worker, lalu draw terbaru disimpan di KV untuk overlay.
+        Event TikTok dibaca dari service tiktok-live-konektor. API key tetap di server; gift diproses melalui webhook realtime atau fallback sync, lalu draw terbaru disimpan di KV untuk overlay.
       </p>
     </div>
   `;
@@ -884,59 +857,70 @@ export async function checkBlacklist(env: AdminEnv, ip: string): Promise<boolean
 admin.get('/live', async (c) => {
   const msg = c.req.query('msg');
   const msgType = c.req.query('type') || 'success';
-  const secretSet = Boolean((c.env as any).LIVE_SECRET);
-  const renderState = await getRenderListenerState(c.env);
+  const connectorState = await getTikTokConnectorState(c.env);
   const current = await getLiveDraw(c.env);
   const host = c.req.header('host') || 'domain-kamu.workers.dev';
   const overlayUrl = 'https://' + host + '/live';
-  const service = renderState.service;
-  const isStopped = service?.suspended === 'suspended';
-  const renderConfigured = Boolean((c.env as any).RENDER_API_KEY);
-  const statusHtml = !renderConfigured
-    ? '<span class="badge badge-yellow">RENDER_API_KEY belum di-set</span>'
-    : !renderState.ok ? '<span class="badge badge-red">[!] ERROR</span>'
-    : isStopped ? '<span class="badge badge-red">[stop] STOPPED</span>'
-    : '<span class="badge badge-green">> RUNNING</span>';
+  const webhookUrl = 'https://' + host + '/api/live/connector-webhook?secret=YOUR_WEBHOOK_SECRET';
+  const connector = connectorState.data || {};
+  const running = connector.running === true;
+  const configured = connectorConfigured(c.env as any);
+  const webhookConfigured = Boolean((c.env as any).TIKTOK_CONNECTOR_WEBHOOK_SECRET);
 
+  const statusHtml = !configured
+    ? '<span class="badge badge-yellow">API KEY BELUM DI-SET</span>'
+    : !connectorState.ok
+      ? '<span class="badge badge-red">[!] ERROR</span>'
+      : running
+        ? '<span class="badge badge-green">LIVE CONNECTED</span>'
+        : '<span class="badge badge-yellow">' + esc(String(connector.status || 'DISCONNECTED')) + '</span>';
+
+  const stats = connector.stats || {};
   const content = `
     ${msg ? `<div class="alert alert-${esc(msgType)}">${esc(msg)}</div>` : ''}
+
     <div class="card" style="border-color:var(--gold-dim);">
-      <div class="card-title">Kontrol TikTok Listener</div>
+      <div class="card-title">tiktok-live-konektor</div>
       <div style="display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap;">
         <div>
-          <div style="font-size:18px;font-weight:700;">@jalurtarot</div>
-          <div style="font-size:12px;color:var(--text-dim);margin-top:4px;">Render: <span id="render-status">${statusHtml}</span></div>
-          ${renderState.error ? `<div style="font-size:11px;color:var(--red);margin-top:6px;">${esc(renderState.error)}</div>` : ''}
+          <div style="font-size:18px;font-weight:700;">@${esc(String(connector.username || 'jalurtarot'))}</div>
+          <div style="font-size:12px;color:var(--text-dim);margin-top:4px;">Status: ${statusHtml}</div>
+          <div style="font-size:11px;color:var(--text-faint);margin-top:6px;">Room ID: ${esc(String(connector.roomId || '-'))} · Event terakhir: ${esc(String(connector.lastEventAt || '-'))}</div>
+          ${connectorState.error ? `<div style="font-size:11px;color:var(--red);margin-top:6px;">${esc(connectorState.error)}</div>` : ''}
         </div>
-        <div style="display:flex;gap:.6rem;flex-wrap:wrap;">
-          <form method="POST" action="/admin/live/render/start" onsubmit="return confirm('Nyalakan TikTok Listener di Render?')"><button class="btn btn-success" type="submit">> NYALAKAN</button></form>
-          <form method="POST" action="/admin/live/render/stop" onsubmit="return confirm('Stop TikTok Listener di Render?')"><button class="btn btn-danger" type="submit">[stop] STOP</button></form>
-          <form method="GET" action="/admin/live"><button class="btn btn-ghost" type="submit">(refresh) REFRESH</button></form>
-        </div>
+        <form method="GET" action="/admin/live"><button class="btn btn-ghost" type="submit">(refresh) REFRESH</button></form>
+      </div>
+      <div class="stats-row" style="margin-top:1rem;margin-bottom:0;">
+        <div class="stat-box"><div class="stat-label">Chat</div><div class="stat-value">${Number(stats.chat || 0)}</div></div>
+        <div class="stat-box"><div class="stat-label">Likes</div><div class="stat-value">${Number(stats.likes || 0)}</div></div>
+        <div class="stat-box"><div class="stat-label">Gifts</div><div class="stat-value">${Number(stats.gifts || 0)}</div></div>
+        <div class="stat-box"><div class="stat-label">Viewers</div><div class="stat-value">${Number(stats.viewerCount || 0)}</div></div>
       </div>
       <div style="margin-top:1rem;padding-top:.8rem;border-top:1px solid var(--border);font-size:12px;color:var(--text-dim);line-height:1.6;">
-        Listener hanya berjalan ketika kamu menekan <b>NYALAKAN</b>. Saat <b>STOP</b>, service Render di-suspend sehingga bot TikTok tidak berjalan.
+        START/STOP TikTok tetap dilakukan dari dashboard <code>tiktok-live-konektor</code>. Repo ini hanya menjadi consumer, jadi tidak membuat koneksi TikTok kedua.
       </div>
-      ${!renderConfigured ? '<div class="alert alert-error" style="margin-top:1rem;margin-bottom:0;">Set secret Cloudflare <code>RENDER_API_KEY</code> terlebih dahulu.</div>' : ''}
     </div>
 
     <div class="card">
-      <div class="card-title">1. Overlay OBS</div>
-      <p style="font-size:13px;color:var(--text-dim);margin-bottom:0.75rem;">Tambahkan sebagai <b>Browser Source</b> di OBS/Streamlabs saat live TikTok. Latar transparan, otomatis update saat ada penarikan kartu baru. Bisa juga dibuka & di-<i>install</i> sebagai app terpisah di HP/tablet untuk layar kedua.</p>
+      <div class="card-title">Integrasi Realtime</div>
+      <p style="font-size:13px;color:var(--text-dim);line-height:1.7;">
+        REST status/feed memakai <code>TIKTOK_CONNECTOR_API_KEY</code> secara server-side.
+        Gift realtime sebaiknya dikirim dari webhook tiktok-live-konektor ke URL di bawah.
+        Bila webhook belum dipasang, overlay tetap punya fallback sync gift dari REST API.
+      </p>
+      <div class="form-row" style="margin-top:.75rem;"><input type="text" readonly value="${esc(webhookUrl)}" style="flex:1;min-width:260px;" onclick="this.select()"/></div>
+      <p style="font-size:12px;color:var(--text-dim);">Webhook secret: ${webhookConfigured ? '<span class="badge badge-green">configured</span>' : '<span class="badge badge-red">belum di-set</span>'}</p>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Overlay OBS</div>
+      <p style="font-size:13px;color:var(--text-dim);margin-bottom:0.75rem;">Browser Source tetap memakai overlay yang sama dan otomatis membaca draw terbaru.</p>
       <div class="form-row"><input type="text" readonly value="${esc(overlayUrl)}" style="flex:1;min-width:260px;" onclick="this.select()"/><a href="/live" target="_blank" class="btn">-> Buka Overlay</a></div>
     </div>
 
     <div class="card">
-      <div class="card-title">2. Bot Pendengar TikTok Live</div>
-      <p style="font-size:13px;color:var(--text-dim);line-height:1.6;">Token trigger: ${secretSet ? '<span class="badge badge-green">LIVE_SECRET sudah di-set</span>' : '<span class="badge badge-red">LIVE_SECRET BELUM di-set</span>'}</p>
-      ${!secretSet ? '<p style="font-size:12px;color:var(--yellow);margin-top:0.5rem;">Set <code>LIVE_SECRET</code> pada Worker dan environment listener Render.</p>' : ''}
-      <p style="font-size:12px;color:var(--text-faint);margin-top:0.75rem;">Bot Node.js berada di folder <code>tiktok-listener/</code> dan menerima gift dari @jalurtarot.</p>
-    </div>
-
-    <div class="card">
-      <div class="card-title">3. Coba Manual (tanpa TikTok)</div>
-      <p style="font-size:13px;color:var(--text-dim);margin-bottom:0.75rem;">Simulasikan gift masuk untuk uji coba overlay sebelum live beneran.</p>
-      <form method="POST" action="/admin/live/test-draw"><div class="form-row"><label>Susunan</label><select name="spreadId"><option value="single">1 Kartu</option><option value="three-card">3 Kartu</option></select><label>Username</label><input type="text" name="username" placeholder="@penonton" value="@tester"/><label>Nama Gift</label><input type="text" name="giftName" placeholder="Mawar" value="Mawar"/><button type="submit" class="btn btn-primary">[tarot] Tarik Kartu Sekarang</button></div></form>
+      <div class="card-title">Coba Manual (tanpa TikTok)</div>
+      <form method="POST" action="/admin/live/test-draw"><div class="form-row"><label>Susunan</label><select name="spreadId"><option value="single">1 Kartu</option><option value="three-card">3 Kartu</option></select><label>Username</label><input type="text" name="username" value="@tester"/><label>Nama Gift</label><input type="text" name="giftName" value="Mawar"/><button type="submit" class="btn btn-primary">[tarot] Tarik Kartu Sekarang</button></div></form>
     </div>
 
     <div class="card">
@@ -945,26 +929,6 @@ admin.get('/live', async (c) => {
     </div>
   `;
   return c.html(adminShell('Ramalan Live', content, 'live'));
-});
-
-admin.post('/live/render/start', async (c) => {
-  try {
-    const service = await getRenderListener(c.env);
-    if (service.suspended === 'suspended') await renderApiRequest(c.env, '/services/' + service.id + '/resume', { method: 'POST' });
-    return c.redirect('/admin/live?msg=Listener+Render+berhasil+dinyalakan&type=success');
-  } catch (e: any) {
-    return c.redirect('/admin/live?msg=' + encodeURIComponent(String(e?.message || e)) + '&type=error');
-  }
-});
-
-admin.post('/live/render/stop', async (c) => {
-  try {
-    const service = await getRenderListener(c.env);
-    if (service.suspended !== 'suspended') await renderApiRequest(c.env, '/services/' + service.id + '/suspend', { method: 'POST' });
-    return c.redirect('/admin/live?msg=Listener+Render+berhasil+di-stop&type=success');
-  } catch (e: any) {
-    return c.redirect('/admin/live?msg=' + encodeURIComponent(String(e?.message || e)) + '&type=error');
-  }
 });
 
 admin.post('/live/test-draw', async (c) => {
