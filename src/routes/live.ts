@@ -46,7 +46,7 @@ function safeEqual(a: string, b: string): boolean {
 
 let lastConnectorSyncAt = 0;
 let connectorSyncPromise: Promise<void> | null = null;
-const CONNECTOR_SYNC_MIN_INTERVAL_MS = 1_500;
+const CONNECTOR_SYNC_MIN_INTERVAL_MS = 5_000;
 const CONNECTOR_EVENT_MAX_AGE_MS = 30_000;
 
 async function syncRecentConnectorGifts(env: LiveEnv): Promise<void> {
