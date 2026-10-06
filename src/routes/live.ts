@@ -1,8 +1,17 @@
 import { Hono } from 'hono';
 import type { Env as ApiEnv } from './api';
 import { generateLiveDraw, getLiveDraw, saveLiveDraw, type LiveSpreadId } from '../lib/live';
+import {
+  connectorConfigured,
+  getConnectorEvents,
+  getConnectorStats,
+  getConnectorStatus,
+  processConnectorEvent,
+  type ConnectorEvent,
+  type TikTokConnectorEnv,
+} from '../lib/tiktokConnector';
 
-export type LiveEnv = ApiEnv & {
+export type LiveEnv = ApiEnv & TikTokConnectorEnv & {
   LIVE_SECRET?: string;
 };
 
@@ -33,6 +42,34 @@ function safeEqual(a: string, b: string): boolean {
   const n = Math.max(ea.length, eb.length);
   for (let i = 0; i < n; i++) diff |= (ea[i] ?? 0) ^ (eb[i] ?? 0);
   return diff === 0;
+}
+
+let lastConnectorSyncAt = 0;
+let connectorSyncPromise: Promise<void> | null = null;
+const CONNECTOR_SYNC_MIN_INTERVAL_MS = 1_500;
+const CONNECTOR_EVENT_MAX_AGE_MS = 30_000;
+
+async function syncRecentConnectorGifts(env: LiveEnv): Promise<void> {
+  if (!connectorConfigured(env)) return;
+
+  const now = Date.now();
+  if (connectorSyncPromise) return connectorSyncPromise;
+  if (now - lastConnectorSyncAt < CONNECTOR_SYNC_MIN_INTERVAL_MS) return;
+  lastConnectorSyncAt = now;
+
+  connectorSyncPromise = (async () => {
+    const payload = await getConnectorEvents(env, 'gift', 20);
+    const events = Array.isArray(payload?.events) ? [...payload.events].reverse() : [];
+    for (const event of events) {
+      const timestamp = Date.parse(String(event?.timestamp || ''));
+      if (Number.isFinite(timestamp) && now - timestamp > CONNECTOR_EVENT_MAX_AGE_MS) continue;
+      await processConnectorEvent(env, event);
+    }
+  })().finally(() => {
+    connectorSyncPromise = null;
+  });
+
+  return connectorSyncPromise;
 }
 
 // POST /api/live/trigger
@@ -71,10 +108,58 @@ live.post('/trigger', async (c) => {
   return c.json({ ok: true, draw });
 });
 
+// POST /api/live/connector-webhook
+// Preferred realtime path from tiktok-live-konektor. Configure its webhook URL as:
+// https://YOUR_DOMAIN/api/live/connector-webhook?secret=YOUR_WEBHOOK_SECRET
+live.post('/connector-webhook', async (c) => {
+  const expected = String(c.env.TIKTOK_CONNECTOR_WEBHOOK_SECRET || '').trim();
+  const supplied = String(c.req.query('secret') || c.req.header('X-TikTok-Webhook-Secret') || '').trim();
+
+  if (!expected) {
+    return c.json({ error: 'TIKTOK_CONNECTOR_WEBHOOK_SECRET belum di-set.' }, 503);
+  }
+  if (!supplied || !safeEqual(supplied, expected)) {
+    return c.json({ error: 'Webhook secret tidak valid.' }, 401);
+  }
+
+  let event: ConnectorEvent;
+  try { event = await c.req.json<ConnectorEvent>(); }
+  catch { return c.json({ error: 'Format JSON webhook tidak valid.' }, 400); }
+
+  try {
+    const result = await processConnectorEvent(c.env, event);
+    return c.json({ ok: true, ...result });
+  } catch (error: any) {
+    return c.json({ error: String(error?.message || error) }, 503);
+  }
+});
+
+// Server-side proxy. API key tiktok-live-konektor tidak pernah dikirim ke browser.
+live.get('/connector/status', async (c) => {
+  c.header('Cache-Control', 'no-store');
+  try { return c.json(await getConnectorStatus(c.env)); }
+  catch (error: any) { return c.json({ ok: false, error: String(error?.message || error) }, 502); }
+});
+
+live.get('/connector/stats', async (c) => {
+  c.header('Cache-Control', 'no-store');
+  try { return c.json(await getConnectorStats(c.env)); }
+  catch (error: any) { return c.json({ ok: false, error: String(error?.message || error) }, 502); }
+});
+
+live.get('/connector/events', async (c) => {
+  const types = String(c.req.query('type') || 'chat,like,gift');
+  const limit = Number(c.req.query('limit') || 50);
+  c.header('Cache-Control', 'no-store');
+  try { return c.json(await getConnectorEvents(c.env, types, limit)); }
+  catch (error: any) { return c.json({ ok: false, error: String(error?.message || error) }, 502); }
+});
+
 // GET /api/live/state
-// Polled by the OBS/browser overlay. Hanya mengembalikan draw yang masih "segar"
-// (lihat LIVE_STATE_MAX_AGE_MS); selain itu { draw: null }.
+// Polled by the OBS/browser overlay. A lightweight connector sync is used as a
+// fallback when webhook delivery has not been configured yet.
 live.get('/state', async (c) => {
+  try { await syncRecentConnectorGifts(c.env); } catch {}
   const draw = await getLiveDraw(c.env);
   const fresh = draw && Date.now() - draw.createdAt <= LIVE_STATE_MAX_AGE_MS ? draw : null;
   c.header('Cache-Control', 'no-store');
