@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import {
+  crossedLikeMilestone,
   defaultLiveSettings,
   getLiveSettings,
   parseLiveSettingsForm,
@@ -52,6 +53,16 @@ test('admin form accepts unchecked toggles and validates strict numeric bounds',
   }
   assert.throws(() => parseLiveSettingsForm(form({ targetGiftName: '<script>' })));
   assert.throws(() => parseLiveSettingsForm(form({ likeEnabled: 'false' })));
+});
+
+test('like milestone only fires on a real boundary crossing', () => {
+  assert.equal(crossedLikeMilestone(38, 39, 40), false);
+  assert.equal(crossedLikeMilestone(39, 40, 40), true);
+  assert.equal(crossedLikeMilestone(40, 40, 40), false);
+  assert.equal(crossedLikeMilestone(40, 41, 40), false);
+  assert.equal(crossedLikeMilestone(79, 120, 40), true);
+  assert.equal(crossedLikeMilestone(120, 110, 40), false);
+  assert.equal(crossedLikeMilestone(10, 20, 0), false);
 });
 
 test('Live settings are persisted without TTL and read back', async () => {
