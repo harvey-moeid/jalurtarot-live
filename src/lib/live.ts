@@ -53,6 +53,7 @@ export interface LiveDraw {
   username: string;
   giftName?: string;
   giftCount?: number;
+  triggerType?: 'gift' | 'like';
   cards: LiveCardView[];
   summary: string;
 }
@@ -105,6 +106,7 @@ export function generateLiveDraw(
   username: string,
   giftName?: string,
   giftCount?: number,
+  triggerType: 'gift' | 'like' = 'gift',
 ): LiveDraw {
   const spread = getSpreadById(spreadId) ?? getSpreadById('single')!;
   const drawn = drawCardsForSpread(spread);
@@ -118,6 +120,7 @@ export function generateLiveDraw(
     username: username?.trim() || 'Penonton',
     giftName,
     giftCount,
+    triggerType,
     cards,
     summary: buildSummary(cards, spreadId, username),
   };

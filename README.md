@@ -25,13 +25,13 @@ Saat penonton mengirim gift target, **tiktok-live-konektor** mengirim event ke W
 
 ## Fitur
 
-- **Ramalan Live** — overlay OBS yang tampil otomatis saat gift masuk di TikTok Live
+- **Ramalan Live** — overlay OBS otomatis saat gift atau milestone like TikTok LIVE terpenuhi
 - **78 kartu Rider-Waite** lengkap dengan gambar
 - **3 aspek ramalan** per kartu: Hubungan / Karir / Nasib
 - **Kartu Harian** deterministik (sama untuk semua orang di hari yang sama, hash djb2)
 - **Reading manual** (`/reading`) — 1 kartu atau 3 kartu, dengan tone selector
 - **Tone selector** — spiritual / praktis / puitis
-- **Admin Panel** (`/admin`) — dashboard, kontrol Ramalan Live, banner, IP blacklist, test draw manual
+- **Admin Panel** (`/admin/live`) — status konektor, konfigurasi gift dan like, banner situs, test draw manual (tanpa halaman blacklist LLM lama)
 - **PWA** — bisa diinstall di HP (manifest + icons)
 - **Fisher-Yates shuffle** — pengundian kartu uniform, bukan `Math.random()` naif
 - Semua ramalan gratis, tanpa limit, tanpa AI/LLM eksternal
@@ -84,10 +84,10 @@ TikTok LIVE @jalurtarot
         ↓
 tiktok-live-konektor (Render)
         ├─ REST /api/v1/status, /stats, /events
-        └─ webhook gift realtime
+        └─ webhook gift + like realtime
                 ↓
 Cloudflare Worker jalurtarot-live
-        ↓  filter gift + dedupe + pilih spread
+        ↓  pengaturan KV, filter gift/like + dedupe + pilih spread
 tarik kartu → simpan KV live:current
         ↓
 GET /api/live/state
@@ -166,13 +166,37 @@ wrangler secret put TIKTOK_CONNECTOR_WEBHOOK_SECRET
 
 `TIKTOK_CONNECTOR_API_KEY` harus sama dengan `API_KEY` pada service `tiktok-live-konektor`.
 
-Di dashboard `tiktok-live-konektor`, tambahkan webhook event `gift` ke:
+Di dashboard `tiktok-live-konektor`, daftarkan webhook event **`gift` dan `like`** ke:
 
 ```text
 https://DOMAIN-JALURTAROT/api/live/connector-webhook?secret=WEBHOOK_SECRET
 ```
 
-Webhook adalah jalur realtime yang disarankan. Bila belum dipasang, overlay memiliki fallback sync gift dari REST API. Folder `tiktok-listener/` dipertahankan hanya sebagai legacy fallback dan bukan lagi dependency utama.
+Webhook adalah jalur realtime yang disarankan. Bila belum dipasang, overlay memiliki fallback polling event gift dan like dari REST API (best-effort, tidak menjamin semua event). Folder `tiktok-listener/` dipertahankan sebagai legacy fallback dan bukan lagi dependency utama.
+
+### Pengaturan gift dan like tanpa redeploy
+
+Buka `/admin/live` setelah login. Pengaturan disimpan di Cloudflare KV dengan key
+`live:automation:settings:v1`; ketika belum ada data, default mengikuti `wrangler.toml`
+untuk gift (aktif, semua gift, minimal 1 koin, 3 kartu mulai 5 koin) dan like aktif
+setiap 40 like (1 kartu). Perubahan tidak mengubah variabel `wrangler.toml` dan
+mungkin membutuhkan waktu singkat untuk propagasi antar lokasi Cloudflare.
+
+- Gift: toggle aktif/nonaktif, nama gift atau `*`, ambang nilai koin, ambang
+  tiga kartu, dan pilihan spread default.
+- Like: toggle aktif/nonaktif, setiap N like pada satu room, dan 1/3 kartu.
+  Preferensi counter memakai `totalLikeCount` jika tersedia; selain itu, menjumlah
+  `likeCount` dari event yang masuk. Event dengan ID sama dicegah diproses ulang
+  secara best-effort; lonjakan melewati beberapa milestone memicu maksimal satu draw
+  per event. KV **tidak menyediakan increment atomik**; untuk live sangat ramai,
+  gunakan Durable Objects agar tidak terjadi race penghitungan.
+- Pada konektor Render, webhook harus dikonfigurasi untuk kedua event `gift` dan `like`.
+  REST polling tersedia sebagai fallback, bukan pengganti webhook yang andal.
+- API feed `/api/live/connector/{status,stats,events}` hanya dapat diakses
+  dengan sesi login admin; jangan mengirim `TIKTOK_CONNECTOR_API_KEY` ke browser.
+- Untuk kompatibilitas, `/admin` mengarah ke `/admin/live`. Halaman blacklist
+  dihapus karena tidak pernah dipakai untuk menolak request publik maupun ramalan statis;
+  Banner dipertahankan karena `/api/banner` dibaca oleh homepage.
 
 ### 5. Setup OBS
 
@@ -182,7 +206,7 @@ https://livejalur.muidsoft.com/live
 ```
 Background transparan, resolusi 1920×1080.
 
-Untuk uji coba tanpa live TikTok beneran, buka `/admin/live` — ada tombol test draw manual.
+Untuk uji coba tanpa live TikTok beneran, buka `/admin/live` — ada tombol test draw manual dan pengaturan gift/like.
 
 ---
 
@@ -237,7 +261,7 @@ GET  /api/live/connector/events?type=chat,like,gift&limit=50
 POST /api/live/connector-webhook?secret=...
 ```
 
-Ketiga endpoint GET memanggil `tiktok-live-konektor` dari Worker dengan bearer API key, jadi credential tidak pernah dikirim ke browser.
+Ketiga endpoint GET memanggil `tiktok-live-konektor` dari Worker dengan bearer API key dan membutuhkan sesi admin. Credential tidak pernah dikirim ke browser.
 
 ## Storage — KV Keys
 
@@ -269,18 +293,16 @@ GET  /api/daily-card    Data kartu harian
 GET  /api/config        Status statis
 GET  /api/banner        Banner aktif dari KV (publik)
 
-GET  /admin             Dashboard admin
+GET  /admin             Redirect ke /admin/live
 GET  /admin/login       Login admin
 POST /admin/login       Auth + set cookie
 POST /admin/logout      Clear cookie
-GET  /admin/live        Kontrol Ramalan Live + test draw manual
+GET  /admin/live        Status TikTok, pengaturan gift/like + test draw manual
+POST /admin/live/settings   Simpan pengaturan gift/like (sesi admin, same-origin)
 POST /admin/live/test-draw  Trigger draw manual (auth cookie admin)
 GET  /admin/banner      Kelola banner
 POST /admin/banner/set  Simpan banner ke KV
 POST /admin/banner/deactivate  Hapus banner dari KV
-GET  /admin/blacklist   Kelola IP blacklist
-POST /admin/blacklist/add     Blacklist IP
-POST /admin/blacklist/remove  Unblock IP
 ```
 
 ---
@@ -320,7 +342,8 @@ Tiga gaya interpretasi untuk `/reading` & `/daily` (Ramalan Live selalu memakai 
 
 - `tiktok-live-connector` adalah reverse-engineering pihak ketiga — bisa berhenti bekerja jika TikTok mengubah sistem internalnya.
 - Service `tiktok-live-konektor` harus dalam status Connected saat live. Autostart tidak diwajibkan; START/STOP tetap dikontrol dari dashboard konektor.
-- `live:current` hanya menyimpan 1 draw terakhir — dua gift yang masuk hampir bersamaan hanya menampilkan yang paling baru.
+- `live:current` hanya menyimpan 1 draw terakhir — event gift/like yang masuk hampir bersamaan hanya menampilkan yang paling baru.
+- Milestone like dihitung best-effort menggunakan KV; dalam traffic tinggi, penambahan bersamaan bisa menyebabkan hitungan tidak tepat.
 - Overlay polling tiap ~2 detik — ada delay ±2 detik antara trigger dan tampil di layar.
 - Bundle size — `cards.ts` + `enrichedMeanings.ts` + `liveAspectMeanings.ts` cukup besar, pantau jika mendekati limit 1MB Workers free tier.
 - `routes/agent.ts` dan `lib/config.ts` (legacy dari versi Oracle berbasis AI) masih ada di kode tapi tidak lagi terhubung ke fitur aktif — aman diabaikan.

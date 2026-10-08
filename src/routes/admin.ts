@@ -2,6 +2,7 @@
 import { Hono } from 'hono';
 import { generateLiveDraw, saveLiveDraw, getLiveDraw, type LiveSpreadId } from '../lib/live';
 import { connectorConfigured, getConnectorStatus } from '../lib/tiktokConnector';
+import { getLiveSettings, parseLiveSettingsForm, saveLiveSettings } from '../lib/liveSettings';
 
 import type { AdminEnv } from '../middleware/adminAuth';
 import { adminAuth, getAdminPassword, isAuthenticated, isLoginRateLimited, recordFailedLogin, clearLoginFailures, createAdminSession, destroyAdminSession, ADMIN_SESSION_TTL_SECONDS } from '../middleware/adminAuth';
@@ -28,14 +29,6 @@ async function getTikTokConnectorState(env: AdminEnv): Promise<{ ok: boolean; da
 // ======================================
 // -- KV HELPERS --
 // ======================================
-
-async function isBlacklisted(env: AdminEnv, ip: string): Promise<boolean> {
-  try { return (await env.RATE_LIMIT_KV.get(`blacklist:${ip}`)) !== null; } catch { return false; }
-}
-
-async function listBlacklistEntries(env: AdminEnv): Promise<string[]> {
-  try { return (await env.RATE_LIMIT_KV.list({ prefix: 'blacklist:' })).keys.map(k => k.name.replace('blacklist:', '')); } catch { return []; }
-}
 
 async function getBanner(env: AdminEnv): Promise<{ active: boolean; text: string; type: string } | null> {
   try {
@@ -70,10 +63,8 @@ function esc(str: string | undefined | null): string {
 
 function adminShell(title: string, content: string, activePage: string = ''): string {
   const nav = [
-    { href: '/admin', label: '[dashboard] Dashboard', id: 'dashboard' },
     { href: '/admin/live', label: '[live] Live', id: 'live' },
     { href: '/admin/banner', label: '[banner] Banner', id: 'banner' },
-    { href: '/admin/blacklist', label: '[blocked] Blacklist', id: 'blacklist' },
   ];
 
   return `<!DOCTYPE html>
@@ -565,57 +556,8 @@ admin.post('/logout', async (c) => {
 // -- ROUTES: DASHBOARD --
 // ======================================
 
-admin.get('/', async (c) => {
-  const blacklistedEntries = await listBlacklistEntries(c.env);
-  const current = await getLiveDraw(c.env);
-  const connectorIsConfigured = connectorConfigured(c.env as any);
-  const webhookConfigured = Boolean((c.env as any).TIKTOK_CONNECTOR_WEBHOOK_SECRET);
-
-  const content = `
-    <div class="stats-row">
-      <div class="stat-box">
-        <div class="stat-label">IP Blacklisted</div>
-        <div class="stat-value">${blacklistedEntries.length}</div>
-        <div class="stat-sub">aktif di KV</div>
-      </div>
-      <div class="stat-box">
-        <div class="stat-label">Live Draw</div>
-        <div class="stat-value">${current ? '1' : '0'}</div>
-        <div class="stat-sub">${current ? 'draw tersedia' : 'belum ada draw'}</div>
-      </div>
-      <div class="stat-box">
-        <div class="stat-label">TikTok API</div>
-        <div class="stat-value">${connectorIsConfigured ? 'ON' : 'OFF'}</div>
-        <div class="stat-sub">${connectorIsConfigured ? 'shared connector aktif' : 'API key belum di-set'}</div>
-      </div>
-      <div class="stat-box">
-        <div class="stat-label">Webhook</div>
-        <div class="stat-value">${webhookConfigured ? 'ON' : 'OFF'}</div>
-        <div class="stat-sub">push event realtime</div>
-      </div>
-    </div>
-
-    <div class="card">
-      <div class="card-title">Quick Links</div>
-      <div style="display:flex;gap:0.75rem;flex-wrap:wrap;">
-        <a href="/admin/live" class="btn btn-ghost">[live] Kontrol Live</a>
-        <a href="/admin/banner" class="btn btn-ghost">[banner] Kelola Banner</a>
-        <a href="/admin/blacklist" class="btn btn-ghost">[blocked] Kelola Blacklist</a>
-        <a href="/live" target="_blank" class="btn btn-ghost">[overlay] Buka Overlay</a>
-      </div>
-    </div>
-
-    <div class="card">
-      <div class="card-title">Status Sistem</div>
-      <p style="font-size:13px;color:var(--text-dim);line-height:1.8;">
-        JalurTarot Live berjalan dalam mode lokal/static: kartu dan interpretasi berasal dari data repository.
-        Event TikTok dibaca dari service tiktok-live-konektor. API key tetap di server; gift diproses melalui webhook realtime atau fallback sync, lalu draw terbaru disimpan di KV untuk overlay.
-      </p>
-    </div>
-  `;
-
-  return c.html(adminShell('[dashboard] Dashboard', content, 'dashboard'));
-});
+// Admin utama hanya mengelola fitur website yang benar-benar aktif.
+admin.get('/', (c) => c.redirect('/admin/live'));
 
 admin.get('/banner', async (c) => {
   const banner = await getBanner(c.env);
@@ -715,122 +657,6 @@ admin.post('/banner/deactivate', async (c) => {
 });
 
 // ======================================
-// -- ROUTES: BLACKLIST --
-// ======================================
-
-admin.get('/blacklist', async (c) => {
-  const msg = c.req.query('msg');
-  const msgType = c.req.query('type') || 'success';
-
-  // List semua blacklist keys
-  let blacklistedIPs: string[] = [];
-  try {
-    const list = await c.env.RATE_LIMIT_KV.list({ prefix: 'blacklist:' });
-    blacklistedIPs = list.keys.map(k => k.name.replace('blacklist:', ''));
-  } catch {}
-
-  const content = `
-    ${msg ? `<div class="alert alert-${esc(msgType)}">${esc(msg)}</div>` : ''}
-
-    <div class="card">
-      <div class="card-title">Blacklist IP</div>
-      <form method="POST" action="/admin/blacklist/add">
-        <div class="form-row">
-          <label>IP Address</label>
-          <input type="text" name="ip" placeholder="1.2.3.4" required/>
-          <label>Alasan (opsional)</label>
-          <input type="text" name="reason" placeholder="Spam, abuse, dll" style="min-width:180px;"/>
-          <button type="submit" class="btn btn-danger">[blocked] Blacklist</button>
-        </div>
-        <p style="font-size:11px;color:var(--text-faint);">IP yang diblacklist akan langsung mendapat 429 pada semua request LLM.</p>
-      </form>
-    </div>
-
-    <div class="card">
-      <div class="card-title">IP yang Diblacklist (${blacklistedIPs.length})</div>
-      ${blacklistedIPs.length === 0 ? `
-        <div class="empty-state">
-          <p>[ok]</p>
-          <p>Tidak ada IP yang diblacklist</p>
-        </div>
-      ` : `
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>IP Address</th>
-                <th>Status</th>
-                <th>Aksi</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${blacklistedIPs.map(ip => {
-                const safeIp = esc(ip); // FIX BUG #3: escape IP dari KV
-                return `<tr>
-                  <td class="mono">${safeIp}</td>
-                  <td><span class="badge badge-red">BLOCKED</span></td>
-                  <td>
-                    <form method="POST" action="/admin/blacklist/remove" style="display:inline;">
-                      <input type="hidden" name="ip" value="${safeIp}"/>
-                      <button type="submit" class="btn btn-success" style="font-size:11px;">[ok] Unblock</button>
-                    </form>
-                  </td>
-                </tr>`;
-              }).join('')}
-            </tbody>
-          </table>
-        </div>
-      `}
-    </div>
-
-    <div class="card">
-      <div class="card-title">Cara Kerja Blacklist</div>
-      <p style="font-size:13px;color:var(--text-dim);line-height:1.8;">
-        IP diblacklist disimpan di KV dengan key <span class="mono">blacklist:{ip}</span>.<br/>
-        Setiap request LLM (<code style="color:var(--gold)">POST /api/interpret</code>) akan mengecek blacklist sebelum memproses.<br/>
-        IP yang diblacklist langsung mendapat response 429 tanpa memakan kredit.
-      </p>
-    </div>
-  `;
-
-  return c.html(adminShell('[blocked] IP Blacklist', content, 'blacklist'));
-});
-
-// POST /admin/blacklist/add
-admin.post('/blacklist/add', async (c) => {
-  const body = await c.req.parseBody();
-  const ip = (body['ip'] as string || '').trim();
-  const reason = (body['reason'] as string || '').trim();
-  const redirectTo = (body['redirect'] as string) || '/admin/blacklist';
-
-  if (!ip) return c.redirect(`${redirectTo}?msg=IP+tidak+boleh+kosong&type=error`);
-
-  try {
-    const data = JSON.stringify({ reason, blacklistedAt: Date.now() });
-    await c.env.RATE_LIMIT_KV.put(`blacklist:${ip}`, data);
-    return c.redirect(`${redirectTo}?msg=IP+${encodeURIComponent(ip)}+berhasil+diblacklist&type=success`);
-  } catch (e: any) {
-    return c.redirect(`${redirectTo}?msg=Error:+${encodeURIComponent(e.message)}&type=error`);
-  }
-});
-
-// POST /admin/blacklist/remove
-admin.post('/blacklist/remove', async (c) => {
-  const body = await c.req.parseBody();
-  const ip = (body['ip'] as string || '').trim();
-  const redirectTo = (body['redirect'] as string) || '/admin/blacklist';
-
-  if (!ip) return c.redirect(`${redirectTo}?msg=IP+tidak+boleh+kosong&type=error`);
-
-  try {
-    await c.env.RATE_LIMIT_KV.delete(`blacklist:${ip}`);
-    return c.redirect(`${redirectTo}?msg=IP+${encodeURIComponent(ip)}+berhasil+di-unblock&type=success`);
-  } catch (e: any) {
-    return c.redirect(`${redirectTo}?msg=Error:+${encodeURIComponent(e.message)}&type=error`);
-  }
-});
-
-// ======================================
 // -- PUBLIC API: GET /api/banner --
 // (Ini di-export terpisah, di-mount di index.ts di luar /admin)
 // ======================================
@@ -845,10 +671,6 @@ export async function getBannerPublic(env: AdminEnv): Promise<{ active: boolean;
   } catch { return null; }
 }
 
-export async function checkBlacklist(env: AdminEnv, ip: string): Promise<boolean> {
-  return isBlacklisted(env, ip);
-}
-
 // ======================================
 // -- RAMALAN LIVE (TikTok) --
 // ======================================
@@ -858,6 +680,9 @@ admin.get('/live', async (c) => {
   const msg = c.req.query('msg');
   const msgType = c.req.query('type') || 'success';
   const connectorState = await getTikTokConnectorState(c.env);
+  let settings;
+  try { settings = await getLiveSettings(c.env); }
+  catch (error: any) { return c.html(adminShell('Ramalan Live', '<div class="alert alert-error">Pengaturan LIVE gagal dibaca: ' + esc(String(error?.message || error)) + '</div>', 'live'), 503); }
   const current = await getLiveDraw(c.env);
   const host = c.req.header('host') || 'domain-kamu.workers.dev';
   const overlayUrl = 'https://' + host + '/live';
@@ -901,12 +726,62 @@ admin.get('/live', async (c) => {
       </div>
     </div>
 
+
+    <div class="card">
+      <div class="card-title">Pengaturan Otomatis Gift &amp; Like</div>
+      <p style="font-size:13px;color:var(--text-dim);line-height:1.6;margin-bottom:1rem;">
+        Disimpan permanen di Cloudflare KV. Perubahan berlaku tanpa deploy; propagasi antar lokasi dapat tertunda.
+      </p>
+      <form method="POST" action="/admin/live/settings">
+        <div class="form-row">
+          <label style="display:flex;align-items:center;gap:.5rem;"><input type="checkbox" name="giftEnabled" ${settings.giftEnabled ? 'checked' : ''}/> Aktifkan ramalan gift</label>
+        </div>
+        <div class="form-row">
+          <label for="targetGiftName">Gift yang diterima</label>
+          <input id="targetGiftName" name="targetGiftName" type="text" maxlength="80" value="${esc(settings.targetGiftName)}" required/>
+          <small style="color:var(--text-faint);">Gunakan * untuk semua gift</small>
+        </div>
+        <div class="form-row">
+          <label for="minGiftValue">Minimal nilai gift (koin)</label>
+          <input id="minGiftValue" name="minGiftValue" type="number" min="0" max="1000000" step="1" value="${settings.minGiftValue}" required/>
+          <label for="threeCardMinValue">Minimal gift untuk 3 kartu (koin)</label>
+          <input id="threeCardMinValue" name="threeCardMinValue" type="number" min="1" max="1000000" step="1" value="${settings.threeCardMinValue}" required/>
+        </div>
+        <div class="form-row">
+          <label for="defaultSpread">Susunan default gift</label>
+          <select id="defaultSpread" name="defaultSpread">
+            <option value="single" ${settings.defaultSpread === 'single' ? 'selected' : ''}>1 Kartu</option>
+            <option value="three-card" ${settings.defaultSpread === 'three-card' ? 'selected' : ''}>3 Kartu</option>
+          </select>
+        </div>
+        <hr style="border:0;border-top:1px solid var(--border);margin:1.25rem 0;"/>
+        <div class="form-row">
+          <label style="display:flex;align-items:center;gap:.5rem;"><input type="checkbox" name="likeEnabled" ${settings.likeEnabled ? 'checked' : ''}/> Aktifkan ramalan berdasarkan like</label>
+        </div>
+        <div class="form-row">
+          <label for="likeMilestone">Setiap jumlah like</label>
+          <input id="likeMilestone" name="likeMilestone" type="number" min="1" max="1000000" step="1" value="${settings.likeMilestone}" required/>
+          <label for="likeSpread">Jumlah kartu</label>
+          <select id="likeSpread" name="likeSpread">
+            <option value="single" ${settings.likeSpread === 'single' ? 'selected' : ''}>1 Kartu</option>
+            <option value="three-card" ${settings.likeSpread === 'three-card' ? 'selected' : ''}>3 Kartu</option>
+          </select>
+        </div>
+        <p style="font-size:12px;color:var(--text-dim);line-height:1.5;margin:1rem 0;">
+          Like dihitung dari total room TikTok (jika tersedia), atau penjumlahan event dari konektor.
+          Satu event yang melewati beberapa batas hanya memicu satu ramalan. Webhook harus menerima gift dan like.
+          Untuk traffic tinggi, counter KV bersifat best-effort.
+        </p>
+        <button type="submit" class="btn btn-primary">Simpan Pengaturan LIVE</button>
+      </form>
+    </div>
+
     <div class="card">
       <div class="card-title">Integrasi Realtime</div>
       <p style="font-size:13px;color:var(--text-dim);line-height:1.7;">
         REST status/feed memakai <code>TIKTOK_CONNECTOR_API_KEY</code> secara server-side.
-        Gift realtime sebaiknya dikirim dari webhook tiktok-live-konektor ke URL di bawah.
-        Bila webhook belum dipasang, overlay tetap punya fallback sync gift dari REST API.
+        Gift dan like realtime sebaiknya dikirim dari webhook tiktok-live-konektor ke URL di bawah.
+        Bila webhook belum dipasang, overlay mencoba fallback sync gift dan like dari REST API (best-effort).
       </p>
       <div class="form-row" style="margin-top:.75rem;"><input type="text" readonly value="${esc(webhookUrl)}" style="flex:1;min-width:260px;" onclick="this.select()"/></div>
       <p style="font-size:12px;color:var(--text-dim);">Webhook secret: ${webhookConfigured ? '<span class="badge badge-green">configured</span>' : '<span class="badge badge-red">belum di-set</span>'}</p>
@@ -929,6 +804,23 @@ admin.get('/live', async (c) => {
     </div>
   `;
   return c.html(adminShell('Ramalan Live', content, 'live'));
+});
+
+admin.post('/live/settings', async (c) => {
+  // Browser form same-origin only. Sesi admin tetap diperiksa oleh adminAuth.
+  const origin = c.req.header('Origin');
+  if (!origin || origin !== new URL(c.req.url).origin) {
+    return c.text('Origin tidak diizinkan.', 403);
+  }
+  try {
+    const form = await c.req.parseBody();
+    const settings = parseLiveSettingsForm(form as Record<string, unknown>);
+    await saveLiveSettings(c.env, settings);
+    return c.redirect('/admin/live?msg=Pengaturan+LIVE+berhasil+disimpan&type=success', 303);
+  } catch (error: any) {
+    const msg = String(error?.message || error);
+    return c.redirect('/admin/live?msg=' + encodeURIComponent(msg.slice(0, 180)) + '&type=error', 303);
+  }
 });
 
 admin.post('/live/test-draw', async (c) => {

@@ -35,10 +35,7 @@ const DEFAULT_CONNECTOR_URL = 'https://tiktok-live-konektor.onrender.com';
 const REQUEST_TIMEOUT_MS = 8_000;
 const PROCESSED_EVENT_TTL_SECONDS = 6 * 60 * 60;
 
-function intSetting(value: string | undefined, fallback: number, min: number): number {
-  const parsed = Number.parseInt(String(value ?? fallback), 10);
-  return Number.isFinite(parsed) && parsed >= min ? parsed : fallback;
-}
+import { crossedLikeMilestone, getLiveSettings } from './liveSettings';
 
 export function connectorBaseUrl(env: TikTokConnectorEnv): string {
   const raw = String(env.TIKTOK_CONNECTOR_URL || DEFAULT_CONNECTOR_URL).trim().replace(/\/+$/, '');
@@ -129,24 +126,84 @@ function eventMarkerKey(event: ConnectorEvent): string | null {
   return id ? 'live:connector:event:' + id.slice(0, 160) : null;
 }
 
+type ProcessedEventResult = { accepted: boolean; duplicate?: boolean; ignored?: string; drawId?: string };
+
+function safeCount(raw: unknown): number {
+  const n = Number(raw);
+  return Number.isSafeInteger(n) && n > 0 && n <= 1000000 ? n : 0;
+}
+
+async function processLike(
+  env: TikTokConnectorEnv,
+  event: ConnectorEvent,
+  milestone: number,
+  spreadId: LiveSpreadId,
+  marker: string | null,
+): Promise<ProcessedEventResult> {
+  if (!marker) return { accepted: false, ignored: 'like_event_without_id' };
+  const timestamp = Date.parse(String(event.timestamp || ''));
+  if (!Number.isFinite(timestamp) || Math.abs(Date.now() - timestamp) > 5 * 60 * 1000) {
+    return { accepted: false, ignored: 'stale_like_event' };
+  }
+  if (await env.RATE_LIMIT_KV.get(marker)) return { accepted: true, duplicate: true };
+
+  const data = event.data || {};
+  const delta = safeCount(data.likeCount);
+  if (!delta) return { accepted: false, ignored: 'invalid_like_count' };
+  const room = String(event.roomId || event.username || 'unknown').replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 70);
+  const counterKey = 'live:connector:likes:' + (room || 'unknown');
+  const raw = await env.RATE_LIMIT_KV.get(counterKey);
+  let previous = 0;
+  if (raw) {
+    const parsed: unknown = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object' || !Number.isSafeInteger((parsed as any).count) || (parsed as any).count < 0) {
+      throw new Error('Counter like di KV tidak valid.');
+    }
+    previous = (parsed as { count: number }).count;
+  }
+  // Prefer totalLikeCount when the connector reports an increasing room total.
+  // When not available, sum event likeCount (best effort under KV concurrency).
+  const total = safeCount(data.totalLikeCount);
+  const before = !raw && total ? Math.max(0, total - delta) : previous;
+  const count = total ? Math.max(previous, total) : previous + delta;
+  if (!Number.isSafeInteger(count)) throw new Error('Akumulasi like melewati batas aman.');
+
+  const crossed = crossedLikeMilestone(before, count, milestone);
+  let drawId: string | undefined;
+  if (crossed) {
+    // Satu draw per event agar lonjakan like tidak menimpa overlay berkali-kali.
+    const draw = generateLiveDraw(spreadId, normalizedViewerName(event), milestone + ' Like', milestone, 'like');
+    if (!await saveLiveDraw(env, draw)) throw new Error('Gagal menyimpan draw like ke KV.');
+    drawId = draw.id;
+  }
+  await env.RATE_LIMIT_KV.put(counterKey, JSON.stringify({ count }), { expirationTtl: PROCESSED_EVENT_TTL_SECONDS });
+  await env.RATE_LIMIT_KV.put(marker, '1', { expirationTtl: PROCESSED_EVENT_TTL_SECONDS });
+  return drawId ? { accepted: true, drawId } : { accepted: true, ignored: 'like_milestone_not_reached' };
+}
+
 export async function processConnectorEvent(
   env: TikTokConnectorEnv,
   event: ConnectorEvent,
-): Promise<{ accepted: boolean; duplicate?: boolean; ignored?: string; drawId?: string }> {
+): Promise<ProcessedEventResult> {
   if (!event || typeof event !== 'object') return { accepted: false, ignored: 'invalid_event' };
-  if (String(event.event || '').toLowerCase() !== 'gift') {
+  const eventType = String(event.event || '').toLowerCase();
+  if (eventType !== 'gift' && eventType !== 'like') {
     return { accepted: false, ignored: 'event_not_used_for_draw' };
   }
 
-  const data = event.data || {};
+  const settings = await getLiveSettings(env);
   const marker = eventMarkerKey(event);
-  if (marker && await env.RATE_LIMIT_KV.get(marker)) {
-    return { accepted: true, duplicate: true };
+  if (eventType === 'like') {
+    if (!settings.likeEnabled) return { accepted: false, ignored: 'like_disabled' };
+    return processLike(env, event, settings.likeMilestone, settings.likeSpread, marker);
   }
+  if (!settings.giftEnabled) return { accepted: false, ignored: 'gift_disabled' };
+  if (marker && await env.RATE_LIMIT_KV.get(marker)) return { accepted: true, duplicate: true };
 
+  const data = event.data || {};
   const giftName = String(data.giftName || 'Gift').slice(0, 80);
-  const target = String(env.LIVE_TARGET_GIFT_NAME || '*').trim();
-  if (target && target !== '*' && giftName.toLowerCase() !== target.toLowerCase()) {
+  const target = settings.targetGiftName;
+  if (target !== '*' && giftName.toLowerCase() !== target.toLowerCase()) {
     return { accepted: false, ignored: 'gift_not_target' };
   }
 
@@ -159,20 +216,14 @@ export async function processConnectorEvent(
   const repeatCount = Math.max(Number(data.repeatCount) || 1, 1);
   const diamondCount = Math.max(Number(data.diamondCount) || 0, 0);
   const totalValue = Math.max(Number(data.totalValue) || diamondCount * repeatCount || 0, 0);
-  const minGiftValue = intSetting(env.LIVE_MIN_GIFT_VALUE, 1, 0);
-  if (totalValue < minGiftValue) {
+  if (totalValue < settings.minGiftValue) {
     return { accepted: false, ignored: 'gift_below_minimum' };
   }
 
-  const threeCardMinValue = intSetting(env.LIVE_THREE_CARD_MIN_VALUE, 5, 1);
-  const defaultSpread: LiveSpreadId = env.LIVE_DEFAULT_SPREAD === 'three-card' ? 'three-card' : 'single';
-  const spreadId: LiveSpreadId = totalValue >= threeCardMinValue ? 'three-card' : defaultSpread;
-  const draw = generateLiveDraw(spreadId, normalizedViewerName(event), giftName, repeatCount);
-  const saved = await saveLiveDraw(env, draw);
-  if (!saved) throw new Error('Gagal menyimpan draw connector ke KV.');
+  const spreadId: LiveSpreadId = totalValue >= settings.threeCardMinValue ? 'three-card' : settings.defaultSpread;
+  const draw = generateLiveDraw(spreadId, normalizedViewerName(event), giftName, repeatCount, 'gift');
+  if (!await saveLiveDraw(env, draw)) throw new Error('Gagal menyimpan draw connector ke KV.');
 
-  if (marker) {
-    await env.RATE_LIMIT_KV.put(marker, '1', { expirationTtl: PROCESSED_EVENT_TTL_SECONDS });
-  }
+  if (marker) await env.RATE_LIMIT_KV.put(marker, '1', { expirationTtl: PROCESSED_EVENT_TTL_SECONDS });
   return { accepted: true, drawId: draw.id };
 }
