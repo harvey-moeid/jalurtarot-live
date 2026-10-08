@@ -17,7 +17,7 @@ Listener ini berjalan sebagai Render Background Worker dan memakai Euler Stream 
    - `TARGET_GIFT_NAME` = `*` untuk semua gift
    - `MIN_GIFT_VALUE` = `1`
    - `THREE_CARD_MIN_VALUE` = `5`
-   - `LIKE_MILESTONE` = `1000`
+   - `LIKE_MILESTONE` = `40`
 
 Setelah update dari GitHub, tunggu deploy selesai lalu periksa Logs. Jangan menjalankan service Render dan Termux bersamaan untuk akun yang sama.
 

@@ -6,9 +6,13 @@ import type { Env } from '../routes/api';
 export type AdminEnv = Env & {
   ADMIN_PASSWORD: string;
   LIVE_SECRET?: string;
-  RENDER_API_KEY?: string;
-  RENDER_LISTENER_SERVICE_ID?: string;
-  RENDER_LISTENER_SERVICE_NAME?: string;
+  TIKTOK_CONNECTOR_URL?: string;
+  TIKTOK_CONNECTOR_API_KEY?: string;
+  TIKTOK_CONNECTOR_WEBHOOK_SECRET?: string;
+  LIVE_TARGET_GIFT_NAME?: string;
+  LIVE_MIN_GIFT_VALUE?: string;
+  LIVE_THREE_CARD_MIN_VALUE?: string;
+  LIVE_DEFAULT_SPREAD?: string;
 };
 
 export const ADMIN_SESSION_TTL_SECONDS = 8 * 60 * 60;

@@ -4,6 +4,12 @@
 # Password untuk /admin
 ADMIN_PASSWORD=ganti-dengan-password-kamu
 
-# Token rahasia untuk POST /api/live/trigger (dipakai bot TikTok listener,
-# lihat header X-Live-Secret). Buat token acak, contoh: openssl rand -hex 24
+# API read-only dari tiktok-live-konektor.
+# Nilainya harus sama dengan API_KEY di service tiktok-live-konektor.
+TIKTOK_CONNECTOR_API_KEY=ganti-dengan-api-key-connector
+
+# Secret webhook push dari tiktok-live-konektor ke Worker ini.
+TIKTOK_CONNECTOR_WEBHOOK_SECRET=ganti-dengan-token-acak
+
+# Legacy fallback: hanya diperlukan bila masih memakai POST /api/live/trigger.
 LIVE_SECRET=ganti-dengan-token-acak

@@ -26,7 +26,7 @@ EULER_API_KEY=API_KEY_EULER_STREAM
 ```
 Jangan kirim atau commit nilai rahasia. `EULER_API_KEY` adalah key dari dashboard Euler Stream yang memiliki akses WebSocket. `SIGN_API_KEY` lama tetap diterima sebagai alias, tetapi disarankan pindahkan nilainya ke `EULER_API_KEY`.
 
-Pengaturan opsional: `TARGET_GIFT_NAME=*`, `MIN_GIFT_VALUE=1`, `THREE_CARD_MIN_VALUE=5`, `LIKE_MILESTONE=1000`.
+Pengaturan opsional: `TARGET_GIFT_NAME=*`, `MIN_GIFT_VALUE=1`, `THREE_CARD_MIN_VALUE=5`, `LIKE_MILESTONE=40`.
 
 ## Jalankan
 ```sh
