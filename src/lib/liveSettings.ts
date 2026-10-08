@@ -95,6 +95,13 @@ function isLiveSettings(value: unknown): value is LiveSettings {
   } catch { return false; }
 }
 
+/** Satu draw maksimum per event sekalipun meloncat beberapa milestone. */
+export function crossedLikeMilestone(previous: number, current: number, milestone: number): boolean {
+  if (![previous, current, milestone].every(Number.isSafeInteger)
+    || previous < 0 || current <= previous || milestone < 1) return false;
+  return Math.floor(current / milestone) > Math.floor(previous / milestone);
+}
+
 export async function getLiveSettings(env: LiveSettingsEnv): Promise<LiveSettings> {
   if (cache && Date.now() < cache.expires) return cache.settings;
   // Gagal membaca KV tidak boleh diam-diam mengaktifkan aturan lama.
