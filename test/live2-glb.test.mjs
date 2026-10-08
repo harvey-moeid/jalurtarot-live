@@ -20,6 +20,11 @@ test('LIVE 2 loads local Three.js, GLTFLoader and retains the LIVE 1 endpoint', 
   assert.ok(html.indexOf('GLTFLoader.r146.js') < html.indexOf('live2.js'));
   assert.match(script, /new THREE\.GLTFLoader/);
   assert.match(script, /\/models\/jalur-tarot\.glb/);
+  assert.match(script, /\/models\/jalur-tarot-custom\.glb/);
+  assert.match(script, /loadLegacyCharacter/);
+  assert.match(script, /new THREE\.Box3/);
+  assert.match(script, /new THREE\.PlaneGeometry/);
+  assert.match(script, /characterBaseY/);
   assert.match(script, /getObjectByName\('HeldCardFace'\)/);
   assert.match(script, /\/api\/live\/state/);
   assert.match(index, /app\.get\('\/live'/);
