@@ -8,6 +8,8 @@ Saat penonton mengirim gift target, **tiktok-live-konektor** mengirim event ke W
 
 ---
 
+> **Arsitektur aktif (Oktober 2026):** `tiktok-live-konektor` adalah satu-satunya sumber event TikTok. Cloudflare Worker menerima webhook gift/like, memproses setelan melalui KV, dan melayani `/live` serta `/live2`. `tiktok-listener/render.yaml` dihapus karena Blueprint listener lama tidak dipakai. Menghapus file tidak menghentikan service Render yang sudah dibuat; service lama harus dihentikan/dihapus terpisah di dashboard Render. Jangan menghapus service `tiktok-live-konektor`.
+
 ## Stack
 
 | Layer | Teknologi |
@@ -68,7 +70,7 @@ Saat penonton mengirim gift target, **tiktok-live-konektor** mengirim event ke W
 │       ├── markdown.ts            ← markdownToHtml()
 │       ├── icons.ts               ← SVG icons
 │       └── config.ts              ← Legacy LLM config helper (untuk /admin/health)
-├── tiktok-listener/          ← Bot Node.js (jalan terpisah di Termux/VPS)
+├── tiktok-listener/          ← Arsip kode listener lama (tidak dijalankan/deploy)
 ├── public/                   ← Gambar kartu (78 JPG), icons, manifest PWA
 ├── .github/workflows/ci.yml  ← Type check + deploy otomatis
 ├── wrangler.toml
@@ -172,7 +174,7 @@ Di dashboard `tiktok-live-konektor`, daftarkan webhook event **`gift` dan `like`
 https://DOMAIN-JALURTAROT/api/live/connector-webhook?secret=WEBHOOK_SECRET
 ```
 
-Webhook adalah jalur realtime yang disarankan. Bila belum dipasang, overlay memiliki fallback polling event gift dan like dari REST API (best-effort, tidak menjamin semua event). Folder `tiktok-listener/` dipertahankan sebagai legacy fallback dan bukan lagi dependency utama.
+Webhook adalah jalur realtime utama. Overlay memiliki fallback polling event gift dan like dari REST API service **yang sama**, `tiktok-live-konektor` (best-effort, tidak menjamin semua event). `tiktok-listener/` hanya arsip historis, jangan deploy atau hidupkan listener kedua.
 
 ### Pengaturan gift dan like tanpa redeploy
 
@@ -253,7 +255,7 @@ ADMIN_PASSWORD
 TIKTOK_CONNECTOR_API_KEY
 TIKTOK_CONNECTOR_WEBHOOK_SECRET
 
-# Legacy fallback saja
+# Legacy trigger dinonaktifkan secara operasional; tidak dibutuhkan untuk integrasi connector.
 LIVE_SECRET
 
 # Vars di wrangler.toml
@@ -301,7 +303,7 @@ GET  /history           Riwayat ramalan (localStorage)
 GET  /support           Halaman support / QRIS
 GET  /live              Overlay OBS (transparan, auto-polling)
 
-POST /api/live/trigger  Trigger draw dari bot TikTok (wajib header X-Live-Secret)
+POST /api/live/trigger  Endpoint kompatibilitas lama (deprecated, jangan digunakan)
 GET  /api/live/state    Status draw terkini (di-poll oleh /live)
 POST /api/interpret     Interpretasi statis (SSE)
 GET  /api/daily-card    Data kartu harian
