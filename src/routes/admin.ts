@@ -680,6 +680,9 @@ admin.get('/live', async (c) => {
   const msg = c.req.query('msg');
   const msgType = c.req.query('type') || 'success';
   const connectorState = await getTikTokConnectorState(c.env);
+  let settings;
+  try { settings = await getLiveSettings(c.env); }
+  catch (error: any) { return c.html(adminShell('Ramalan Live', '<div class="alert alert-error">Pengaturan LIVE gagal dibaca: ' + esc(String(error?.message || error)) + '</div>', 'live'), 503); }
   const current = await getLiveDraw(c.env);
   const host = c.req.header('host') || 'domain-kamu.workers.dev';
   const overlayUrl = 'https://' + host + '/live';
@@ -723,12 +726,62 @@ admin.get('/live', async (c) => {
       </div>
     </div>
 
+
+    <div class="card">
+      <div class="card-title">Pengaturan Otomatis Gift &amp; Like</div>
+      <p style="font-size:13px;color:var(--text-dim);line-height:1.6;margin-bottom:1rem;">
+        Disimpan permanen di Cloudflare KV. Perubahan berlaku tanpa deploy; propagasi antar lokasi dapat tertunda.
+      </p>
+      <form method="POST" action="/admin/live/settings">
+        <div class="form-row">
+          <label style="display:flex;align-items:center;gap:.5rem;"><input type="checkbox" name="giftEnabled" ${settings.giftEnabled ? 'checked' : ''}/> Aktifkan ramalan gift</label>
+        </div>
+        <div class="form-row">
+          <label for="targetGiftName">Gift yang diterima</label>
+          <input id="targetGiftName" name="targetGiftName" type="text" maxlength="80" value="${esc(settings.targetGiftName)}" required/>
+          <small style="color:var(--text-faint);">Gunakan * untuk semua gift</small>
+        </div>
+        <div class="form-row">
+          <label for="minGiftValue">Minimal nilai gift (koin)</label>
+          <input id="minGiftValue" name="minGiftValue" type="number" min="0" max="1000000" step="1" value="${settings.minGiftValue}" required/>
+          <label for="threeCardMinValue">Minimal gift untuk 3 kartu (koin)</label>
+          <input id="threeCardMinValue" name="threeCardMinValue" type="number" min="1" max="1000000" step="1" value="${settings.threeCardMinValue}" required/>
+        </div>
+        <div class="form-row">
+          <label for="defaultSpread">Susunan default gift</label>
+          <select id="defaultSpread" name="defaultSpread">
+            <option value="single" ${settings.defaultSpread === 'single' ? 'selected' : ''}>1 Kartu</option>
+            <option value="three-card" ${settings.defaultSpread === 'three-card' ? 'selected' : ''}>3 Kartu</option>
+          </select>
+        </div>
+        <hr style="border:0;border-top:1px solid var(--border);margin:1.25rem 0;"/>
+        <div class="form-row">
+          <label style="display:flex;align-items:center;gap:.5rem;"><input type="checkbox" name="likeEnabled" ${settings.likeEnabled ? 'checked' : ''}/> Aktifkan ramalan berdasarkan like</label>
+        </div>
+        <div class="form-row">
+          <label for="likeMilestone">Setiap jumlah like</label>
+          <input id="likeMilestone" name="likeMilestone" type="number" min="1" max="1000000" step="1" value="${settings.likeMilestone}" required/>
+          <label for="likeSpread">Jumlah kartu</label>
+          <select id="likeSpread" name="likeSpread">
+            <option value="single" ${settings.likeSpread === 'single' ? 'selected' : ''}>1 Kartu</option>
+            <option value="three-card" ${settings.likeSpread === 'three-card' ? 'selected' : ''}>3 Kartu</option>
+          </select>
+        </div>
+        <p style="font-size:12px;color:var(--text-dim);line-height:1.5;margin:1rem 0;">
+          Like dihitung dari total room TikTok (jika tersedia), atau penjumlahan event dari konektor.
+          Satu event yang melewati beberapa batas hanya memicu satu ramalan. Webhook harus menerima gift dan like.
+          Untuk traffic tinggi, counter KV bersifat best-effort.
+        </p>
+        <button type="submit" class="btn btn-primary">Simpan Pengaturan LIVE</button>
+      </form>
+    </div>
+
     <div class="card">
       <div class="card-title">Integrasi Realtime</div>
       <p style="font-size:13px;color:var(--text-dim);line-height:1.7;">
         REST status/feed memakai <code>TIKTOK_CONNECTOR_API_KEY</code> secara server-side.
-        Gift realtime sebaiknya dikirim dari webhook tiktok-live-konektor ke URL di bawah.
-        Bila webhook belum dipasang, overlay tetap punya fallback sync gift dari REST API.
+        Gift dan like realtime sebaiknya dikirim dari webhook tiktok-live-konektor ke URL di bawah.
+        Bila webhook belum dipasang, overlay mencoba fallback sync gift dan like dari REST API (best-effort).
       </p>
       <div class="form-row" style="margin-top:.75rem;"><input type="text" readonly value="${esc(webhookUrl)}" style="flex:1;min-width:260px;" onclick="this.select()"/></div>
       <p style="font-size:12px;color:var(--text-dim);">Webhook secret: ${webhookConfigured ? '<span class="badge badge-green">configured</span>' : '<span class="badge badge-red">belum di-set</span>'}</p>
@@ -751,6 +804,23 @@ admin.get('/live', async (c) => {
     </div>
   `;
   return c.html(adminShell('Ramalan Live', content, 'live'));
+});
+
+admin.post('/live/settings', async (c) => {
+  // Browser form same-origin only. Sesi admin tetap diperiksa oleh adminAuth.
+  const origin = c.req.header('Origin');
+  if (!origin || origin !== new URL(c.req.url).origin) {
+    return c.text('Origin tidak diizinkan.', 403);
+  }
+  try {
+    const form = await c.req.parseBody();
+    const settings = parseLiveSettingsForm(form as Record<string, unknown>);
+    await saveLiveSettings(c.env, settings);
+    return c.redirect('/admin/live?msg=Pengaturan+LIVE+berhasil+disimpan&type=success', 303);
+  } catch (error: any) {
+    const msg = String(error?.message || error);
+    return c.redirect('/admin/live?msg=' + encodeURIComponent(msg.slice(0, 180)) + '&type=error', 303);
+  }
 });
 
 admin.post('/live/test-draw', async (c) => {
