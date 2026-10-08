@@ -4,7 +4,7 @@ Aplikasi baca tarot berbasis web untuk siaran **TikTok Live** — 100% statis, t
 
 Saat penonton mengirim gift target, **tiktok-live-konektor** mengirim event ke Worker → kartu ditarik otomatis → tampil di overlay OBS. API key konektor tetap server-side dan tidak ditanam di JavaScript publik.
 
-🔗 **Production:** [jalurtarotfree.muidsoft.com](https://jalurtarotfree.muidsoft.com)
+🔗 **Production:** [livejalur.muidsoft.com](https://livejalur.muidsoft.com)
 
 ---
 
@@ -178,7 +178,7 @@ Webhook adalah jalur realtime yang disarankan. Bila belum dipasang, overlay memi
 
 Tambahkan **Browser Source** di OBS, arahkan ke:
 ```
-https://jalurtarotfree.muidsoft.com/live
+https://livejalur.muidsoft.com/live
 ```
 Background transparan, resolusi 1920×1080.
 
