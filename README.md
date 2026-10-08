@@ -230,7 +230,10 @@ Keamanan: tidak perlu API key di browser, tidak ada parameter trigger publik bar
 
 - Script `public/live2.js` menangani event tarot dan renderer; `public/live2.css` mengatur layout portrait untuk layar browser dan OBS.
 - Aset Three.js **r146** dan `GLTFLoader` dibundel sebagai file statis yang dipin versi, dengan lisensi `public/vendor/THREE-LICENSE.txt`. Browser memuatnya dari origin situs sendiri, sesuai CSP.
-- Model `public/models/jalur-tarot.glb` adalah aset glTF 2.0 biner original; node bernama `Head`, `LeftArm`, `RightArm`, `EyeLeft`, `EyeRight`, `Mouth`, dan `HeldCardFace` dipakai animasi. Pastikan nama node ini tetap ada ketika mengganti model dengan hasil Blender.
+- Model 3D baru **opsional**: unggah file `public/models/jalur-tarot-custom.glb` ke branch PR ini (GitHub → Add file → Upload files), kemudian commit. `public/live2.js` otomatis memilihnya dan melakukan auto-scaling/centering berdasarkan bounding box; tidak perlu nama node tertentu.
+- Untuk unggahan GLB unrigged/static, gerakan host memakai idle body motion dan kartu tarot terpisah di depan badan, dengan gambar kartu terbaru terpasang otomatis. Gerakan bibir atau tangan mengikuti tulang hanya tersedia jika aset punya node rig yang sesuai.
+- Bila file custom belum ada, rusak, atau gagal dimuat, browser otomatis memakai model lama `public/models/jalur-tarot.glb`. Tidak ada perubahan pada webhook, pengaturan gift/like, atau overlay LIVE 1.
+- Rekomendasi aset: gunakan GLB hasil optimasi (2–5 MB) agar OBS/mobile lebih ringan; model asli hasil scan 28 MB bisa menyebabkan initial loading lambat. Asset baru belum aktif sampai GLB diunggah ke path tersebut.
 - Pengujian termasuk validasi struktur GLB. Demo `/live2?demo=1&background=1` tidak mengirim event TikTok dan tidak mengubah KV.
 - Jika font, WebGL, atau gambar tarot bermasalah, sistem menampilkan fallback; gift dan webhook di Worker tidak diubah oleh pembaruan tampilan.
 - Setelah PR di-merge ke `master` dan CI deploy berhasil, refresh source Browser OBS untuk mengambil aset baru.
