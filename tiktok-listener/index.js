@@ -23,9 +23,9 @@ const targetGiftLower = targetGift && targetGift !== '*' ? targetGift.toLowerCas
 const minGiftValue = Number.parseInt(env.MIN_GIFT_VALUE || '1', 10);
 const threeCardMinValue = Number.parseInt(env.THREE_CARD_MIN_VALUE || '5', 10);
 const defaultSpread = env.DEFAULT_SPREAD === 'three-card' ? 'three-card' : 'single';
-// LIKE_MILESTONE: tidak di-set = default 1000; di-set kosong = nonaktif; angka = setiap N like.
+// LIKE_MILESTONE: tidak di-set = default 40; di-set kosong = nonaktif; angka = setiap N like.
 // Sebelumnya variabel yang tidak di-set menghasilkan NaN sehingga fitur mati diam-diam.
-const likeMilestoneRaw = env.LIKE_MILESTONE === undefined ? '1000' : String(env.LIKE_MILESTONE).trim();
+const likeMilestoneRaw = env.LIKE_MILESTONE === undefined ? '40' : String(env.LIKE_MILESTONE).trim();
 const likeMilestone = likeMilestoneRaw ? Number.parseInt(likeMilestoneRaw, 10) : 0;
 const reconnectMinMs = Math.max(1000, Number.parseInt(env.RECONNECT_MIN_MS || '5000', 10) || 5000);
 const reconnectMaxMs = Math.max(reconnectMinMs, Number.parseInt(env.RECONNECT_MAX_MS || '60000', 10) || 60000);
