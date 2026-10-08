@@ -35,7 +35,7 @@ const DEFAULT_CONNECTOR_URL = 'https://tiktok-live-konektor.onrender.com';
 const REQUEST_TIMEOUT_MS = 8_000;
 const PROCESSED_EVENT_TTL_SECONDS = 6 * 60 * 60;
 
-import { getLiveSettings } from './liveSettings';
+import { crossedLikeMilestone, getLiveSettings } from './liveSettings';
 
 export function connectorBaseUrl(env: TikTokConnectorEnv): string {
   const raw = String(env.TIKTOK_CONNECTOR_URL || DEFAULT_CONNECTOR_URL).trim().replace(/\/+$/, '');
@@ -168,7 +168,7 @@ async function processLike(
   const count = total ? Math.max(previous, total) : previous + delta;
   if (!Number.isSafeInteger(count)) throw new Error('Akumulasi like melewati batas aman.');
 
-  const crossed = Math.floor(count / milestone) > Math.floor(before / milestone);
+  const crossed = crossedLikeMilestone(before, count, milestone);
   let drawId: string | undefined;
   if (crossed) {
     // Satu draw per event agar lonjakan like tidak menimpa overlay berkali-kali.
