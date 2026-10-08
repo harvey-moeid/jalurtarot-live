@@ -87,6 +87,9 @@ test('integration checks: authenticated admin, webhook and like fallback', async
   assert.doesNotMatch(admin, /admin\.(?:get|post)\('\/blacklist/);
   assert.match(connector, /eventType === 'like'/);
   assert.match(connector, /eventMarkerKey\(event\)/);
+  assert.match(connector, /redirect:\s*'manual'/);
+  assert.doesNotMatch(connector, /redirect:\s*'error'/);
+  assert.match(connector, /response\.status >= 300 && response\.status < 400/);
   assert.match(live, /getConnectorEvents\(env, 'gift,like'/);
   assert.match(live, /isAuthenticated\(c\)/);
   assert.match(live, /draw\.triggerType==="like"/);
