@@ -8,6 +8,7 @@ import { historyPage } from './routes/history';
 import { readingPage } from './routes/reading';
 import { supportPage } from './routes/support';
 import live, { liveOverlayPage, type LiveEnv } from './routes/live';
+import { live2OverlayPage } from './routes/live2';
 
 const app = new Hono<{ Bindings: LiveEnv }>();
 
@@ -58,6 +59,8 @@ app.get('/support', (c) => c.html(supportPage()));
 
 // Overlay OBS untuk Ramalan Live (transparan, dipakai sebagai Browser Source)
 app.get('/live', (c) => c.html(liveOverlayPage()));
+// LIVE 2: portrait animated magical tarot host, reuses same secure live state.
+app.get('/live2', (c) => c.html(live2OverlayPage()));
 
 // Ã¢ÂÂÃ¢ÂÂ 404 Ã¢ÂÂÃ¢ÂÂ
 app.notFound((c) => {
