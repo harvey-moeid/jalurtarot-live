@@ -247,10 +247,15 @@
   let character = null;
   let head = null, leftArm = null, rightArm = null, heldPivot = null;
   let eyeLeft = null, eyeRight = null, mouth = null, heldFace = null;
+  let mixer = null, mixerTime = 0, characterBaseY = 0, isCustomModel = false;
   let lastShownCard = '';
   let textureTicket = 0;
   const textures = new THREE.TextureLoader();
   const loader = new THREE.GLTFLoader();
+  // The uploaded model is a single unrigged mesh. Keep the original rigged
+  // character as a fallback until the optional model asset is available.
+  const CUSTOM_MODEL_PATH = '/models/jalur-tarot-custom.glb';
+  const LEGACY_MODEL_PATH = '/models/jalur-tarot.glb';
 
   function refreshHeldCard() {
     if (!heldFace || heldCardImage === lastShownCard) return;
@@ -262,26 +267,82 @@
         map.dispose();
         return;
       }
-      map.flipY = false;
+      // Procedurally created planes use regular Three.js UV orientation;
+      // meshes exported from glTF require the glTF texture convention.
+      map.flipY = !heldFace.userData.generatedCardFace;
       map.encoding = THREE.sRGBEncoding;
       const oldMaterial = heldFace.material;
       const updatedMaterial = new THREE.MeshBasicMaterial({ map: map, side: THREE.DoubleSide });
       updatedMaterial.userData.dynamicCard = true;
       heldFace.material = updatedMaterial;
-      // glTF materials are shared by multiple meshes; only dispose materials we created.
       if (oldMaterial && oldMaterial.userData?.dynamicCard) {
         if (oldMaterial.map) oldMaterial.map.dispose();
         oldMaterial.dispose();
       }
     }, undefined, function () {
-      // Decorative purple card remains visible if an image is unavailable.
       if (ticket === textureTicket) lastShownCard = '';
     });
   }
 
-  loader.load('/models/jalur-tarot.glb', function (gltf) {
-    character = gltf.scene;
-    character.position.x = .48; // open clear space for the readable speech bubble
+  function buildFloatingTarotCard() {
+    const pivot = new THREE.Group();
+    pivot.name = 'HeldCardPivot';
+    // With the new static model we cannot move hands independently. Place
+    // the card in front of its torso as a small hovering magical prop.
+    pivot.position.set(-.22, 1.75, .58);
+    const backing = new THREE.Mesh(
+      new THREE.BoxGeometry(.8, 1.12, .055),
+      new THREE.MeshStandardMaterial({ color: 0x432050, metalness: .28, roughness: .4 })
+    );
+    pivot.add(backing);
+    const trim = new THREE.Mesh(
+      new THREE.PlaneGeometry(.75, 1.07),
+      new THREE.MeshBasicMaterial({ color: 0xe8c684, side: THREE.DoubleSide })
+    );
+    trim.position.z = .031;
+    pivot.add(trim);
+    const face = new THREE.Mesh(
+      new THREE.PlaneGeometry(.68, .98),
+      new THREE.MeshBasicMaterial({ color: 0xefe5fd, side: THREE.DoubleSide })
+    );
+    face.name = 'HeldCardFace';
+    face.userData.generatedCardFace = true;
+    face.position.z = .036;
+    pivot.add(face);
+    character.add(pivot);
+    return { pivot: pivot, face: face };
+  }
+
+  function onCharacterLoaded(gltf, custom) {
+    isCustomModel = custom;
+    character = new THREE.Group();
+    character.name = 'TarotHost';
+    const asset = gltf.scene;
+    character.add(asset);
+    if (custom) {
+      // Blender and scanned GLBs vary in units and origins. Center the asset
+      // in a 3.5-unit stage based on its actual world-space bounding box.
+      asset.updateMatrixWorld(true);
+      const box = new THREE.Box3().setFromObject(asset);
+      const bounds = box.getSize(new THREE.Vector3());
+      if (!Number.isFinite(bounds.y) || bounds.y < 0.0001) {
+        character.remove(asset);
+        character = null;
+        loadLegacyCharacter();
+        return;
+      }
+      asset.scale.multiplyScalar(3.5 / bounds.y);
+      asset.updateMatrixWorld(true);
+      const scaled = new THREE.Box3().setFromObject(asset);
+      const center = scaled.getCenter(new THREE.Vector3());
+      asset.position.x -= center.x;
+      asset.position.y -= scaled.min.y;
+      asset.position.z -= center.z;
+      character.position.set(.48, -1.6, 0);
+    } else {
+      character.position.x = .48;
+    }
+    characterBaseY = character.position.y;
     scene.add(character);
     head = character.getObjectByName('Head');
     leftArm = character.getObjectByName('LeftArm');
@@ -291,13 +352,32 @@
     eyeRight = character.getObjectByName('EyeRight');
     mouth = character.getObjectByName('Mouth');
     heldFace = character.getObjectByName('HeldCardFace');
+    if (!heldFace) {
+      const card = buildFloatingTarotCard();
+      heldPivot = card.pivot;
+      heldFace = card.face;
+    }
+    if (gltf.animations && gltf.animations.length) {
+      mixer = new THREE.AnimationMixer(asset);
+      mixer.clipAction(gltf.animations[0]).play();
+    }
     refreshHeldCard();
     document.querySelector('.host')?.classList.add('is-loaded');
     resize();
     renderFrame(0);
-  }, undefined, function () {
-    overlay.classList.add('no-webgl');
-  });
+  }
+
+  function loadLegacyCharacter() {
+    loader.load(LEGACY_MODEL_PATH, function (gltf) {
+      onCharacterLoaded(gltf, false);
+    }, undefined, function () {
+      overlay.classList.add('no-webgl');
+    });
+  }
+
+  loader.load(CUSTOM_MODEL_PATH, function (gltf) {
+    onCharacterLoaded(gltf, true);
+  }, undefined, loadLegacyCharacter);
 
   let frameHandle = 0, lastFrame = 0;
   let currentWidth = 0, currentHeight = 0;
@@ -327,11 +407,23 @@
     }
     if (leftArm) leftArm.rotation.z = reducedMotion ? 0 : Math.sin(t * 1.15) * .06 - (readingNow ? .05 : 0);
     if (rightArm) rightArm.rotation.z = reducedMotion ? 0 : Math.sin(t * (readingNow ? 3 : 1.4)) * (readingNow ? .16 : .07);
-    if (heldPivot) heldPivot.rotation.y = reducedMotion ? 0 : Math.sin(t * .85) * .13;
+    if (heldPivot) {
+      heldPivot.rotation.y = reducedMotion ? 0 : Math.sin(t * .85) * .13;
+      if (isCustomModel) heldPivot.rotation.z = reducedMotion ? 0 : Math.sin(t * 1.1) * .06;
+    }
+    if (isCustomModel) {
+      character.rotation.y = reducedMotion ? 0 : Math.sin(t * .43) * .055;
+      character.rotation.z = reducedMotion ? 0 : Math.sin(t * .76) * .015;
+    }
+    if (mixer) {
+      const elapsed = mixerTime ? Math.max(0, Math.min(.05, t - mixerTime)) : 0;
+      mixerTime = t;
+      mixer.update(elapsed);
+    }
     if (eyeLeft) eyeLeft.scale.y = blink;
     if (eyeRight) eyeRight.scale.y = blink;
     if (mouth) mouth.scale.y = .033 * (talkingNow && !reducedMotion ? (1.1 + Math.abs(Math.sin(t * 10)) * 2.1) : 1);
-    character.position.y = reducedMotion ? 0 : Math.sin(t * 1.6) * .038;
+    character.position.y = characterBaseY + (reducedMotion ? 0 : Math.sin(t * 1.6) * .038);
     renderer3d.render(scene, camera);
   }
   function frame(time) {
