@@ -265,8 +265,14 @@
       map.flipY = false;
       map.encoding = THREE.sRGBEncoding;
       const oldMaterial = heldFace.material;
-      heldFace.material = new THREE.MeshBasicMaterial({ map: map, side: THREE.DoubleSide });
-      if (oldMaterial && !oldMaterial.userData?.shared) oldMaterial.dispose();
+      const updatedMaterial = new THREE.MeshBasicMaterial({ map: map, side: THREE.DoubleSide });
+      updatedMaterial.userData.dynamicCard = true;
+      heldFace.material = updatedMaterial;
+      // glTF materials are shared by multiple meshes; only dispose materials we created.
+      if (oldMaterial && oldMaterial.userData?.dynamicCard) {
+        if (oldMaterial.map) oldMaterial.map.dispose();
+        oldMaterial.dispose();
+      }
     }, undefined, function () {
       // Decorative purple card remains visible if an image is unavailable.
       if (ticket === textureTicket) lastShownCard = '';
