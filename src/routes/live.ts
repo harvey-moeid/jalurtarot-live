@@ -73,41 +73,9 @@ async function syncRecentConnectorEvents(env: LiveEnv): Promise<void> {
   return sync;
 }
 
-// POST /api/live/trigger
-// Called by the TikTok listener.
-live.post('/trigger', async (c) => {
-  const expectedSecret = (c.env.LIVE_SECRET || '').trim();
-  const givenSecret = (c.req.header('X-Live-Secret') || '').trim();
-
-  if (!expectedSecret) {
-    return c.json(
-      { error: 'LIVE_SECRET belum di-set di server. Jalankan: wrangler secret put LIVE_SECRET' },
-      500,
-    );
-  }
-
-  if (!givenSecret || !safeEqual(givenSecret, expectedSecret)) {
-    return c.json({ error: 'Unauthorized - X-Live-Secret salah atau kosong' }, 401);
-  }
-
-  let body: any;
-  try {
-    body = await c.req.json();
-  } catch {
-    return c.json({ error: 'Format JSON tidak valid' }, 400);
-  }
-
-  const spreadId: LiveSpreadId = isValidSpreadId(body?.spreadId) ? body.spreadId : 'single';
-  const username = typeof body?.username === 'string' ? body.username.slice(0, 60) : 'Penonton';
-  const giftName = typeof body?.giftName === 'string' ? body.giftName.slice(0, 60) : undefined;
-  const giftCount = typeof body?.giftCount === 'number' ? body.giftCount : undefined;
-
-  const draw = generateLiveDraw(spreadId, username, giftName, giftCount);
-  const saved = await saveLiveDraw(c.env, draw);
-  if (!saved) return c.json({ error: 'Gagal menyimpan draw ke storage' }, 503);
-
-  return c.json({ ok: true, draw });
-});
+// Legacy direct listener has been retired. Events are accepted only through
+// /api/live/connector-webhook from the shared tiktok-live-konektor service.
+live.post('/trigger', (c) => c.json({ error: 'Legacy TikTok listener dinonaktifkan. Gunakan connector-webhook.' }, 410));
 
 // POST /api/live/connector-webhook
 // Preferred realtime path from tiktok-live-konektor. Configure its webhook URL as:
