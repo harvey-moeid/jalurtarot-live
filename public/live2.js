@@ -97,12 +97,13 @@
     activeId = id;
     activeUntil = Date.now() + HIDE_AFTER_MS;
 
-    const username = safeText(draw.username, 60) || 'Penonton';
+    const username = safeText(draw.username, 36) || 'Penonton';
     const message = utteranceFor(draw);
     const isLike = draw.triggerType === 'like';
     const giftName = safeText(draw.giftName, 80);
-    speechTitle.textContent = 'Ramalan untuk ' + username;
-    speechMessage.textContent = message;
+    // A shorter bubble protects the character; the reading panel keeps the full message.
+    speechTitle.textContent = 'Ramalan untuk ' + brief(username, 23);
+    speechMessage.textContent = brief(message, 115);
     speakingUntil = Date.now() + Math.min(16_000, Math.max(3800, message.length * 80));
     speech.classList.add('talking');
     document.getElementById('reading-name').textContent = 'Untuk ' + username;
