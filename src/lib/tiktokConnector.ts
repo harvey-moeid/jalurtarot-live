@@ -66,8 +66,14 @@ export async function connectorRequest<T = any>(
         Authorization: 'Bearer ' + key,
       },
       signal: controller.signal,
-      redirect: 'error',
+      // Cloudflare Workers mendukung 'manual' atau 'follow', bukan 'error'.
+      // Jangan ikuti redirect agar Bearer API key tidak bocor ke host lain.
+      redirect: 'manual',
     });
+
+    if (response.status >= 300 && response.status < 400) {
+      throw new Error('tiktok-live-konektor: HTTP ' + response.status + ' redirect ditolak.');
+    }
 
     const text = await response.text();
     let body: any = null;
