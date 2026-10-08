@@ -198,6 +198,21 @@ mungkin membutuhkan waktu singkat untuk propagasi antar lokasi Cloudflare.
   dihapus karena tidak pernah dipakai untuk menolak request publik maupun ramalan statis;
   Banner dipertahankan karena `/api/banner` dibaca oleh homepage.
 
+### LIVE 2 — overlay portrait 3D bergerak
+
+URL OBS Browser Source baru (LIVE 1 tetap di `/live`):
+
+- **Production setelah merge + deploy:** `https://livejalur.muidsoft.com/live2`
+- **Preview tanpa TikTok:** `https://livejalur.muidsoft.com/live2?demo=1&background=1`
+- **Background opaque (opsional):** `/live2?background=1`; default transparan untuk OBS.
+- **Aktifkan voice bahasa Indonesia (opsional):** `/live2?voice=1`. Suara menggunakan `speechSynthesis` di browser dan **tidak dijamin** tersedia/terputar otomatis di semua OBS Browser Source; gunakan opsi enable audio dan cek perangkat OBS. Bubble teks tetap tampil bila suara tidak tersedia.
+
+Pengaturan OBS yang disarankan: **width 1080, height 1920** (9:16), browser source refresh on scene activation bila diperlukan, dan browser source audio dikontrol OBS bila memakai `voice=1`.
+
+LIVE 2 menggunakan endpoint **GET /api/live/state** dan konfigurasi gift/like yang **sama** dengan LIVE 1. Tiap draw terbaru memunculkan 1–3 kartu aktual, user, dan ringkasan dari data `aspect.nasib` selama 45 detik. Karakter **WebGL 3D stylized procedural** bergerak ringan saat idle dan bereaksi saat ramalan; ini **bukan model realistis yang identik dengan mockup gambar**, dan tidak memerlukan CDN/asset 3D eksternal. Kecepatan render dibatasi sekitar 30 FPS, dengan fallback bila WebGL tidak didukung, serta mematuhi reduce motion.
+
+Keamanan: tidak perlu API key di browser, tidak ada parameter trigger publik baru, nama user dan pesan dipasang melalui `textContent`, dan path gambar kartu dibatasi ke `/cards/*.jpg`. Gunakan tombol test draw pada `/admin/live` untuk menguji dengan hasil aktual.
+
 ### 5. Setup OBS
 
 Tambahkan **Browser Source** di OBS, arahkan ke:
