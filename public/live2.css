@@ -149,3 +149,9 @@ body{touch-action:manipulation}
   .footer{bottom:1%}.footer>p{display:none}}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;
   animation-iteration-count:1!important;transition-duration:.01ms!important}}
+
+/* Visible only with /live2?debug=1 to diagnose GLB loading on mobile/OBS. */
+.host__debug{position:absolute;z-index:9;bottom:6%;right:4%;max-width:85%;
+  padding:7px 10px;border:1px solid rgba(255,229,187,.8);
+  border-radius:11px;background:rgba(21,8,39,.94);color:#ffe5ba;
+  font-size:clamp(10px,1.8vw,15px);line-height:1.35;overflow-wrap:anywhere}

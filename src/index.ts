@@ -19,7 +19,7 @@ app.use('*', async (c, next) => {
   c.header('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
   c.header('X-Frame-Options', 'SAMEORIGIN');
   c.header('Content-Security-Policy', "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'self'; form-action 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'");
-  if (c.req.path.startsWith('/admin')) c.header('Cache-Control', 'no-store');
+  if (c.req.path.startsWith('/admin') || c.req.path === '/live2') c.header('Cache-Control', 'no-store');
 });
 
 // -- API routes --

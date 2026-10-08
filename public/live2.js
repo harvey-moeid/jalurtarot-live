@@ -15,6 +15,20 @@
   const speechMessage = document.getElementById('speech-message');
   const soundToggle = document.getElementById('sound-toggle');
   const canvas = document.getElementById('host3d');
+  const modelDebug = document.getElementById('host-model-debug');
+  const modelDebugEnabled = query.get('debug') === '1';
+
+  function reportModel(state, message, error) {
+    overlay.setAttribute('data-model-state', state);
+    if (modelDebugEnabled && modelDebug) {
+      modelDebug.hidden = false;
+      const cause = error ? ' — ' + safeText(error.message || error, 150) : '';
+      modelDebug.textContent = '3D ' + state.toUpperCase() + ': ' + message + cause;
+    }
+    if (error && typeof console !== 'undefined' && console.warn) {
+      console.warn('[Jalur Tarot LIVE 2] ' + message, error);
+    }
+  }
 
   if (query.get('background') === '1') overlay.classList.add('with-background');
 
@@ -209,6 +223,7 @@
   // Never load third-party code or textures from a CDN at streaming time.
   const THREE = window.THREE;
   if (!THREE || typeof THREE.GLTFLoader !== 'function') {
+    reportModel('unavailable', 'Three.js atau WebGL loader tidak tersedia.');
     overlay.classList.add('no-webgl');
     return;
   }
@@ -222,7 +237,8 @@
       powerPreference: 'low-power',
       premultipliedAlpha: false
     });
-  } catch (_) {
+  } catch (error) {
+    reportModel('unavailable', 'Browser gagal membuat WebGL renderer.', error);
     overlay.classList.add('no-webgl');
     return;
   }
@@ -254,7 +270,8 @@
   const loader = new THREE.GLTFLoader();
   // The uploaded model is a single unrigged mesh. Keep the original rigged
   // character as a fallback until the optional model asset is available.
-  const CUSTOM_MODEL_PATH = '/models/jalur-tarot-custom.glb';
+  // Versioned asset URL avoids a cached 404 or a previous model after deploy.
+  const CUSTOM_MODEL_PATH = '/models/jalur-tarot-custom.glb?v=20261009-2';
   const LEGACY_MODEL_PATH = '/models/jalur-tarot.glb';
 
   function refreshHeldCard() {
@@ -328,8 +345,7 @@
       if (!Number.isFinite(bounds.y) || bounds.y < 0.0001) {
         character.remove(asset);
         character = null;
-        loadLegacyCharacter();
-        return;
+        throw new Error('Dimensi model GLB tidak valid.');
       }
       asset.scale.multiplyScalar(3.5 / bounds.y);
       asset.updateMatrixWorld(true);
@@ -365,19 +381,39 @@
     document.querySelector('.host')?.classList.add('is-loaded');
     resize();
     renderFrame(0);
+    reportModel(custom ? 'custom' : 'legacy',
+      custom ? 'Karakter GLB baru berhasil ditampilkan.' : 'Karakter bawaan aktif (fallback).');
   }
 
   function loadLegacyCharacter() {
+    reportModel('fallback', 'Membuka karakter lama karena GLB baru gagal dimuat.');
     loader.load(LEGACY_MODEL_PATH, function (gltf) {
-      onCharacterLoaded(gltf, false);
-    }, undefined, function () {
+      try {
+        onCharacterLoaded(gltf, false);
+      } catch (error) {
+        reportModel('error', 'Karakter bawaan juga gagal ditampilkan.', error);
+        overlay.classList.add('no-webgl');
+      }
+    }, undefined, function (error) {
+      reportModel('error', 'File model bawaan tidak dapat dimuat.', error);
       overlay.classList.add('no-webgl');
     });
   }
 
+  reportModel('loading', 'Memuat model GLB baru…');
   loader.load(CUSTOM_MODEL_PATH, function (gltf) {
-    onCharacterLoaded(gltf, true);
-  }, undefined, loadLegacyCharacter);
+    try {
+      onCharacterLoaded(gltf, true);
+    } catch (error) {
+      if (character) scene.remove(character);
+      character = null;
+      reportModel('error', 'Model GLB gagal dirender.', error);
+      loadLegacyCharacter();
+    }
+  }, undefined, function (error) {
+    reportModel('error', 'Model GLB gagal diunduh atau diproses.', error);
+    loadLegacyCharacter();
+  });
 
   let frameHandle = 0, lastFrame = 0;
   let currentWidth = 0, currentHeight = 0;
@@ -439,6 +475,7 @@
     event.preventDefault();
     cancelAnimationFrame(frameHandle);
     document.querySelector('.host')?.classList.remove('is-loaded');
+    reportModel('error', 'Konteks WebGL hilang.');
     overlay.classList.add('no-webgl');
   });
   window.addEventListener('pagehide', function () {

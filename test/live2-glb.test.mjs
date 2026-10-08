@@ -59,3 +59,19 @@ test('original Jalur Tarot model is a valid GLB with animatable parts', async ()
     assert.ok(view.byteOffset + view.byteLength <= binLength, 'bufferView within BIN payload');
   }
 });
+
+test('uploaded custom tarot GLB is part of deployment with embedded textures', async () => {
+  const raw = await readFile(new URL('public/models/jalur-tarot-custom.glb', root));
+  assert.ok(raw.byteLength > 100_000 && raw.byteLength < 6_000_000, 'uploaded model exists');
+  assert.equal(raw.readUInt32LE(0), 0x46546c67, 'glTF binary magic');
+  assert.equal(raw.readUInt32LE(4), 2, 'glTF version 2');
+  assert.equal(raw.readUInt32LE(8), raw.byteLength, 'correct GLB size');
+  const jsonLength = raw.readUInt32LE(12);
+  assert.equal(raw.readUInt32LE(16), 0x4e4f534a, 'JSON chunk marker');
+  const model = JSON.parse(raw.subarray(20, 20 + jsonLength).toString('utf8'));
+  assert.equal(model.asset.version, '2.0');
+  assert.ok(model.nodes.length >= 1 && model.meshes.length >= 1);
+  assert.ok(model.images.length >= 1 && model.images.every(image => Number.isInteger(image.bufferView)));
+  assert.match(await readFile(new URL('public/live2.js', root), 'utf8'), /jalur-tarot-custom\.glb\?v=/);
+  assert.match(live2OverlayPage(), /id="host-model-debug"/);
+});
