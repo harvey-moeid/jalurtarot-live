@@ -27,7 +27,7 @@ services:
       - key: DEFAULT_SPREAD
         value: single
       - key: LIKE_MILESTONE
-        value: "1000"
+        value: "40"
       - key: RECONNECT_MIN_MS
         value: "5000"
       - key: RECONNECT_MAX_MS

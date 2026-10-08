@@ -172,7 +172,11 @@ Domain production saat ini: `https://livejalur.muidsoft.com` (lihat
 
 ---
 
-## 8. Bot TikTok Live (tiktok-listener)
+## 8. Integrasi TikTok Live
+
+Jalur utama saat ini menggunakan service `tiktok-live-konektor` melalui REST API + webhook. Konfigurasikan `TIKTOK_CONNECTOR_API_KEY` dan `TIKTOK_CONNECTOR_WEBHOOK_SECRET` sebagai Cloudflare secrets (lihat `README.md`). Listener di folder `tiktok-listener/` tetap tersedia sebagai fallback terpisah jika dibutuhkan.
+
+### Listener fallback (tiktok-listener)
 
 Worker di atas TIDAK bisa mendengarkan gift TikTok secara langsung
 (Cloudflare Workers tidak mendukung koneksi Node.js persisten). Untuk itu
