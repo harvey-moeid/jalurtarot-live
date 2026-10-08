@@ -33,7 +33,7 @@ body{touch-action:manipulation}
   background:#f83f80;color:#fff;font-size:clamp(11px,2.7vw,28px);font-weight:800;letter-spacing:.05em;white-space:nowrap}
 .brand small{display:block;margin-top:1vh;font-size:clamp(8px,1.4vw,17px);
   letter-spacing:.21em;color:#e4c9d0;text-shadow:0 3px 8px #100618}
-.host{position:absolute;z-index:1;top:13%;right:-5%;width:97%;height:46%;pointer-events:none}
+.host{position:absolute;z-index:1;top:13%;right:-5%;width:97%;height:45%;pointer-events:none}
 .host canvas{position:relative;z-index:2;display:block;width:100%;height:100%;outline:0;
   opacity:0;transition:opacity .5s ease;filter:drop-shadow(0 8px 22px rgba(26,4,42,.45))}
 .host.is-loaded canvas{opacity:1}
@@ -73,6 +73,9 @@ body{touch-action:manipulation}
   background:linear-gradient(155deg,rgba(26,12,49,.96),rgba(48,19,64,.95));
   box-shadow:0 13px 39px rgba(14,6,28,.56),0 0 29px rgba(182,105,240,.18);
   text-align:center;animation:reveal .5s ease-out}
+.reading[hidden]{display:none!important}
+.no-webgl .host__fallback{display:block}
+.no-webgl #host3d{display:none}
 .reading__eyebrow{color:var(--gold);font:600 clamp(10px,1.75vw,20px) Georgia,serif;letter-spacing:.19em}
 .reading h1{margin:0;color:#fff2fb;font-size:clamp(16px,3.1vw,32px);line-height:1.2;overflow-wrap:anywhere}
 .reading__cards{display:flex;align-items:stretch;justify-content:center;
@@ -90,7 +93,7 @@ body{touch-action:manipulation}
   font-size:clamp(11px,2.05vw,23px);line-height:1.1;overflow-wrap:anywhere}
 .tarot-card figcaption small{display:block;color:#d7b8ed;font-size:.77em;margin-top:2px}
 .reading__cards:has(.tarot-card:nth-child(2)) .tarot-card{width:31%;max-width:31%}
-.reading__interpretation{min-height:0;overflow:hidden}
+.reading__interpretation{min-height:0;overflow:hidden;border-top:1px solid rgba(242,213,156,.24);padding-top:clamp(3px,.45vh,7px)}
 .reading__label{color:var(--gold);font-size:clamp(10px,1.8vw,18px);
   letter-spacing:.14em;font-weight:800}
 .reading__interpretation p{display:-webkit-box;-webkit-box-orient:vertical;
@@ -100,14 +103,14 @@ body{touch-action:manipulation}
   padding:5px 13px;border:1px solid rgba(238,200,157,.4);border-radius:25px;
   background:#6c3185;color:#fff;font-size:clamp(10px,1.65vw,18px);
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.footer{position:absolute;z-index:5;bottom:2%;left:5%;right:5%;text-align:center}
+.footer{position:absolute;z-index:5;top:89%;bottom:1%;left:5%;right:5%;text-align:center}
 .footer__viewer{display:flex;gap:9px;justify-content:center;align-items:center;
   min-height:34px;padding:clamp(7px,1vh,15px) 9px;margin:0 0 .9vh;
   border:1px solid var(--line);border-radius:20px;background:var(--glass);
   box-shadow:0 0 13px rgba(190,106,249,.19);font-size:clamp(11px,2.25vw,23px);
   overflow:hidden}
 .footer__viewer span:first-child{font-size:1.1em;color:var(--gold);flex:none}
-#viewer-label{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.footer__viewer span:last-child{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .footer__cta{width:80%;max-width:700px;margin:auto;padding:clamp(8px,1vh,18px) 14px;
   border:2px solid rgba(245,202,159,.78);border-radius:55px;
   background:linear-gradient(110deg,#612581,#843b86);
@@ -140,7 +143,7 @@ body{touch-action:manipulation}
 @media(min-aspect-ratio:1/1){.brand{top:2%}.host{top:8%;right:1%;width:55%;height:83%}
   .speech{top:19%;left:5%;width:39%}.reading{top:49%;left:5%;width:48%;height:38%}
   .footer{left:16%;right:16%;bottom:1%}}
-@media(max-height:640px) and (max-aspect-ratio:1/1){.brand{top:1%}
+@media(max-height:680px){.brand{top:1%}
   .host{top:12%;height:45%}.speech{top:21%;padding:9px}
   .reading{top:56%;height:31%;padding:9px}.reading__cards{min-height:0}
   .footer{bottom:1%}.footer>p{display:none}}
