@@ -213,6 +213,17 @@ Pengaturan OBS yang disarankan: **width 1080, height 1920** (9:16), browser sour
 
 LIVE 2 menggunakan endpoint **GET /api/live/state** dan konfigurasi gift/like yang **sama** dengan LIVE 1. Tiap draw terbaru memunculkan 1–3 kartu aktual, user, dan ringkasan dari data `aspect.nasib` selama 45 detik. Karakter **WebGL 3D stylized procedural** bergerak ringan saat idle dan bereaksi saat ramalan; ini **bukan model realistis yang identik dengan mockup gambar**, dan tidak memerlukan CDN/asset 3D eksternal. Kecepatan render dibatasi sekitar 30 FPS, dengan fallback bila WebGL tidak didukung, serta mematuhi reduce motion.
 
+### LIVE 2 — layout portrait yang diperbarui
+
+Tampilan /live2 disusun dalam **empat zona terpisah**: judul di atas, karakter Luna + bubble di tengah atas, hasil 1–3 kartu di tengah bawah, dan ticker + ajakan gift di paling bawah. Bubble menampilkan cuplikan singkat agar tidak menutupi wajah; interpretasi lebih panjang tetap ditampilkan pada panel kartu. Nama penonton panjang dan judul kartu terpotong secara visual agar tidak mendorong elemen keluar layar.
+
+- Target utama OBS **1080 × 1920**, dengan penyesuaian untuk browser portrait HP, viewport pendek, dan preview landscape.
+- Kartu tidak lagi berbagi area dengan notifikasi viewer; panel hasil memakai grid yang menyediakan tinggi tersendiri untuk interpretasi.
+- Efek animasi dipertahankan, tetapi dinonaktifkan untuk pengguna dengan preferensi reduced motion. Fallback tanpa WebGL tetap tersedia.
+- Mode default **transparan** untuk OBS; gunakan `?background=1` saat membuka overlay langsung di browser.
+- Jalankan `npm test` untuk regression test yang memastikan batas area host/bubble, kartu, ticker, dan responsivitas tidak tertimpa lagi.
+- Data gift/like, polling dan webhook tetap menggunakan backend yang sama dengan LIVE 1.
+
 Keamanan: tidak perlu API key di browser, tidak ada parameter trigger publik baru, nama user dan pesan dipasang melalui `textContent`, dan path gambar kartu dibatasi ke `/cards/*.jpg`. Gunakan tombol test draw pada `/admin/live` untuk menguji dengan hasil aktual.
 
 ### 5. Setup OBS
