@@ -19,7 +19,7 @@ test('LIVE 2 has a dedicated 9:16 overlay, assets and accessible labels', async 
   assert.match(html, /src="\/live2\.js"/);
   assert.match(html, /href="\/live2\.css"/);
   assert.match(html, /aria-live="polite"/);
-  assert.match(css, /background:transparent/);
+  assert.match(css, /background:\s*transparent/, 'OBS must remain transparent by default');
   assert.match(css, /prefers-reduced-motion/);
   assert.match(css, /max-aspect-ratio/);
 });
