@@ -9,13 +9,15 @@ export function live2OverlayPage(): string {
 <meta name="color-scheme" content="dark">
 <title>Jalur Tarot — LIVE 2 Magical Host</title>
 <link rel="stylesheet" href="/live2.css">
+<script src="/vendor/three.r146.min.js" defer></script>
+<script src="/vendor/GLTFLoader.r146.js" defer></script>
 <script src="/live2.js" defer></script>
 </head>
 <body>
 <main class="live2" id="live2" aria-label="Overlay ramalan tarot TikTok Live">
   <div class="aurora" aria-hidden="true"></div>
   <header class="brand">
-    <div class="brand__row"><span class="brand__moon" aria-hidden="true">☾</span><span class="brand__live">LIVE 2</span><strong>Tarot Reading</strong><span class="brand__star" aria-hidden="true">✦</span></div>
+    <div class="brand__row"><span class="brand__moon" aria-hidden="true">☾</span><span class="brand__live">LIVE 2</span><strong>Jalur Tarot</strong><span class="brand__star" aria-hidden="true">✦</span></div>
     <small>KARTU · ENERGI · PESAN SEMESTA</small>
   </header>
   <div class="stardust" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
@@ -23,7 +25,7 @@ export function live2OverlayPage(): string {
     <div class="host__halo" aria-hidden="true"></div>
     <canvas id="host3d" aria-label="Karakter pembaca tarot tiga dimensi yang bergerak"></canvas>
     <div class="host__fallback" aria-hidden="true">🔮<span>✦</span></div>
-    <div class="host__name">✦ LUNA TAROT ✦</div>
+    <div class="host__name">✦ JALUR TAROT ✦</div>
   </section>
   <section class="speech" id="speech" aria-live="polite" aria-atomic="true">
     <div class="speech__spark" aria-hidden="true">✧</div>
@@ -39,7 +41,7 @@ export function live2OverlayPage(): string {
   </section>
   <footer class="footer">
     <div class="footer__viewer"><span aria-hidden="true">☾</span><span id="viewer-label">Menanti energi baik...</span></div>
-    <div class="footer__cta">🎁 Kirim Gift <small>untuk request ramalan</small></div>
+    <div class="footer__cta"><span aria-hidden="true">🎁</span> Kirim Gift di TikTok <small>untuk membuka ramalan pribadi</small></div>
     <p>SETIAP KARTU ADALAH PESAN ✧ SETIAP KAMU PUNYA CERITA</p>
   </footer>
   <button class="sound-toggle" id="sound-toggle" type="button" hidden aria-pressed="false">🔊 Aktifkan suara</button>
