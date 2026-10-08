@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 import type { Env as ApiEnv } from './api';
+import { isAuthenticated } from '../middleware/adminAuth';
 import { generateLiveDraw, getLiveDraw, saveLiveDraw, type LiveSpreadId } from '../lib/live';
 import {
   connectorConfigured,
@@ -49,7 +50,7 @@ let connectorSyncPromise: Promise<void> | null = null;
 const CONNECTOR_SYNC_MIN_INTERVAL_MS = 5_000;
 const CONNECTOR_EVENT_MAX_AGE_MS = 30_000;
 
-async function syncRecentConnectorGifts(env: LiveEnv): Promise<void> {
+async function syncRecentConnectorEvents(env: LiveEnv): Promise<void> {
   if (!connectorConfigured(env)) return;
 
   const now = Date.now();
@@ -58,7 +59,7 @@ async function syncRecentConnectorGifts(env: LiveEnv): Promise<void> {
   lastConnectorSyncAt = now;
 
   const sync = (async () => {
-    const payload = await getConnectorEvents(env, 'gift', 20);
+    const payload = await getConnectorEvents(env, 'gift,like', 100);
     const events = Array.isArray(payload?.events) ? [...payload.events].reverse() : [];
     for (const event of events) {
       const timestamp = Date.parse(String(event?.timestamp || ''));
@@ -134,7 +135,11 @@ live.post('/connector-webhook', async (c) => {
   }
 });
 
-// Server-side proxy. API key tiktok-live-konektor tidak pernah dikirim ke browser.
+// Server-side proxy; only logged-in admins may access viewer activity.
+live.use('/connector/*', async (c, next) => {
+  if (!await isAuthenticated(c)) return c.json({ error: 'Unauthorized' }, 401);
+  await next();
+});
 live.get('/connector/status', async (c) => {
   c.header('Cache-Control', 'no-store');
   try { return c.json(await getConnectorStatus(c.env)); }
@@ -159,7 +164,7 @@ live.get('/connector/events', async (c) => {
 // Polled by the OBS/browser overlay. A lightweight connector sync is used as a
 // fallback when webhook delivery has not been configured yet.
 live.get('/state', async (c) => {
-  try { await syncRecentConnectorGifts(c.env); } catch {}
+  try { await syncRecentConnectorEvents(c.env); } catch {}
   const draw = await getLiveDraw(c.env);
   const fresh = draw && Date.now() - draw.createdAt <= LIVE_STATE_MAX_AGE_MS ? draw : null;
   c.header('Cache-Control', 'no-store');
@@ -264,7 +269,9 @@ body{align-items:center}
     viewer.innerHTML="Ramalan untuk <strong>"+esc(draw.username||"Penonton")+"</strong>";
     if(draw.giftName){
       gift.hidden=false;
-      gift.innerHTML='<svg class="gift-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M12 20V6M7 9h10M8 6c0-1.7 1.3-3 3-3 1 0 1.8.7 2 1.7C13.2 3.7 14 3 15 3c1.7 0 3 1.3 3 3v3M5 9h14v3H5zM7 12v8h10v-8"/></svg><span>'+esc(draw.giftName)+(draw.giftCount>1?" x "+draw.giftCount:"")+'</span>';
+      var isLike=draw.triggerType==="like";
+      var symbol=isLike?'<path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1.1-1.1a5.5 5.5 0 0 0-7.8 7.8L12 21l8.8-8.6a5.5 5.5 0 0 0 0-7.8z"/>':'<path d="M12 20V6M7 9h10M8 6c0-1.7 1.3-3 3-3 1 0 1.8.7 2 1.7C13.2 3.7 14 3 15 3c1.7 0 3 1.3 3 3v3M5 9h14v3H5zM7 12v8h10v-8"/>';
+      gift.innerHTML='<svg class="gift-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">'+symbol+'</svg><span>'+esc(draw.giftName)+(isLike?"":(draw.giftCount>1?" x "+draw.giftCount:""))+'</span>';
     }else{gift.hidden=true}
     row.innerHTML=(draw.cards||[]).map(function(c){
       return '<article class="live-card'+(c.isReversed?" reversed":"")+'">'+
