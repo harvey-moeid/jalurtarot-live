@@ -35,7 +35,7 @@ test('results keep a real flexing area for up to three cards and an interpretati
   assert.match(block('.reading'), /minmax\(0,1fr\)\s+auto/);
   assert.match(block('.reading__cards'), /min-height:\s*0/);
   assert.match(block('.reading__interpretation'), /border-top:/);
-  assert.match(css, /\.reading__cards:has\(\.tarot-card:nth-child\(2\)\)/);
+  assert.ok(css.includes('.reading__cards:has(.tarot-card:nth-child(2))'));
   assert.match(css, /\.reading\[hidden\]\s*\{\s*display:\s*none\s*!important/);
 });
 
