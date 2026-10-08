@@ -1,313 +1,151 @@
-/* LIVE 2 · portrait-first magical stage for OBS (1080×1920) and mobile.
-   Each section owns its vertical band: header, host/bubble, reading, ticker/CTA.
-   Transparent by default for OBS; ?background=1 enables the full backdrop. */
-:root {
-  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  color: #fff3e4;
-  font-synthesis: none;
-  --gold: #f1d49a;
-  --gold-soft: rgba(241,212,154,.65);
-  --violet: #be93fa;
-  --night: #150c29;
-  --glass: rgba(28,12,51,.91);
-  --border: rgba(245,206,153,.67);
+/* Jalur Tarot LIVE 2: local GLB/Three.js, portrait OBS first. No external assets. */
+:root{
+  font-family:system-ui,-apple-system,"Segoe UI",sans-serif;color:#fff3e3;
+  --gold:#f2d59c;--violet:#c693fd;--mist:#dac6f0;
+  --glass:rgba(30,13,49,.93);--line:rgba(246,207,155,.68);
+  font-synthesis:none;color-scheme:dark
 }
-* { box-sizing: border-box; }
-html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; background: transparent; }
-body { touch-action: manipulation; }
-.live2 {
-  position: relative; isolation: isolate; width: 100vw; height: 100vh;
-  height: 100dvh; overflow: hidden; background: transparent;
+*,*::before,*::after{box-sizing:border-box}
+html,body{width:100%;height:100%;margin:0;overflow:hidden;background:transparent}
+body{touch-action:manipulation}
+[hidden]{display:none!important}
+.live2{
+  position:relative;isolation:isolate;overflow:hidden;
+  width:100%;height:100vh;height:100dvh;background:transparent
 }
-.live2.with-background {
-  background: radial-gradient(ellipse at 62% 35%, #4a2b66 0%, #20132f 46%, #0c0919 87%);
+.live2.with-background{
+  background:radial-gradient(ellipse at 60% 35%,#563076 0,#2b183b 44%,#100a1c 90%)
 }
-.aurora {
-  position: absolute; inset: 0; z-index: -1; pointer-events: none;
-  background:
-    radial-gradient(ellipse at 67% 31%, rgba(173,101,249,.2), transparent 46%),
-    radial-gradient(ellipse at 18% 71%, rgba(238,167,113,.11), transparent 48%);
-}
-.with-background .aurora {
-  background:
-    radial-gradient(ellipse at 59% 31%, rgba(178,109,247,.31), transparent 52%),
-    radial-gradient(ellipse at 18% 70%, rgba(255,199,129,.12), transparent 44%);
-}
-
-/* Header: its own zone (2–12%). */
-.brand {
-  position: absolute; z-index: 6; top: 2.8%; left: 5%; right: 5%;
-  text-align: center; filter: drop-shadow(0 5px 18px #130420);
-}
-.brand__row {
-  display: flex; justify-content: center; align-items: center;
-  gap: clamp(7px, 2.1vw, 23px); margin: 0 auto; max-width: 860px;
-  padding: clamp(9px, 1.1vh, 19px) 2.4%;
-  background: linear-gradient(110deg,rgba(22,10,40,.94),rgba(34,15,53,.91));
-  border: 1.5px solid var(--border); border-radius: 100px;
-  box-shadow: 0 0 28px rgba(179,107,244,.23), inset 0 0 22px rgba(239,209,155,.06);
-  font-family: Georgia, serif;
-}
-.brand__row strong {
-  font-size: clamp(17px, 3.6vw, 42px); font-style: italic; font-weight: 500;
-  white-space: nowrap; color: var(--gold); text-shadow: 0 0 12px #a55fff;
-}
-.brand__live {
-  border-radius: 10px; padding: .38em .72em; background: linear-gradient(120deg,#f83e82,#f258a9);
-  color: white; font: 800 clamp(12px, 2.8vw, 31px)/1.2 system-ui,sans-serif;
-  letter-spacing: .04em; white-space: nowrap;
-  box-shadow: 0 0 16px rgba(255,74,143,.22);
-}
-.brand__moon, .brand__star { color: var(--gold); font-size: clamp(19px, 4.5vw, 49px); }
-.brand small {
-  display: block; margin-top: clamp(7px, .85vh, 15px);
-  color: #ead6ce; letter-spacing: .21em;
-  font-size: clamp(8px, 1.6vw, 17px); text-shadow: 0 2px 8px #130422;
-}
-
-/* Host occupies the center of the upper stage; never flows over the results. */
-.host {
-  position: absolute; z-index: 1; top: 12.5%; right: -10%;
-  width: 91%; height: 42%; pointer-events: none;
-}
-.host canvas {
-  display: block; position: relative; width: 100%; height: 100%;
-  outline: none; filter: drop-shadow(0 0 25px rgba(189,121,252,.29));
-}
-.host__halo {
-  position: absolute; top: 7%; left: 23%; width: 65%; aspect-ratio: 1;
-  border: 1.5px solid rgba(231,197,123,.35); border-radius: 50%;
-  box-shadow: 0 0 0 15px rgba(205,135,255,.055),
-              0 0 70px rgba(201,123,255,.22), inset 0 0 50px rgba(255,221,168,.08);
-  animation: halo 6s ease-in-out infinite;
-}
-.host__halo:before {
-  content: "☾"; position: absolute; right: -4%; top: -11%;
-  font-size: clamp(30px, 6.5vw, 76px); color: #ead196;
-  filter: drop-shadow(0 0 15px rgba(255,195,99,.5));
-}
-.host__name {
-  position: absolute; right: 17%; bottom: 10%;
-  color: var(--gold); font: 600 clamp(11px, 2.2vw, 25px) Georgia,serif;
-  letter-spacing: .2em; text-shadow: 0 2px 13px #270f42;
-  white-space: nowrap;
-}
-.host__fallback {
-  display: none; position: absolute; top: 27%; left: 36%;
-  font-size: clamp(65px, 17vw, 210px);
-  filter: drop-shadow(0 0 25px #954bdb); animation: float 4s ease-in-out infinite;
-}
-.host__fallback span { font-size: .5em; }
-.no-webgl .host__fallback { display: block; }
-.no-webgl #host3d { display: none; }
-
-/* Bubble stays to the left of Luna's face, with a finite vertical footprint. */
-.speech {
-  position: absolute; z-index: 4; top: 20%; left: 4.5%; width: 51%;
-  max-height: 17.5%; padding: clamp(12px, 1.8vh, 28px) 3%;
-  border: 1.5px solid rgba(249,220,170,.91);
-  border-radius: 22px 22px 22px 8px;
-  background: linear-gradient(143deg,rgba(255,250,255,.98),rgba(240,218,255,.97));
-  box-shadow: 0 0 26px rgba(221,148,255,.38), 0 14px 36px rgba(16,3,33,.5);
-  color: #3b2451; transform-origin: 85% 100%;
-  animation: bubble 4s ease-in-out infinite;
-}
-.speech:after {
-  content: ""; position: absolute; right: 9%; bottom: -11px;
-  width: 20px; height: 20px; transform: rotate(45deg);
-  border-right: 1.5px solid rgba(249,220,170,.91);
-  border-bottom: 1.5px solid rgba(249,220,170,.91);
-  background: #f0dfff;
-}
-.speech__spark {
-  position: absolute; right: 4%; top: -13px;
-  color: #a963db; font-size: clamp(23px, 4vw, 41px);
-  animation: twinkle 2.5s infinite;
-}
-.speech__title {
-  display: block; margin-bottom: .65vh; padding-right: 6%;
-  font-size: clamp(13px, 2.65vw, 27px); font-weight: 800;
-  line-height: 1.25; overflow-wrap: anywhere;
-}
-.speech__message {
-  margin: 0; font-size: clamp(12px, 2.28vw, 24px);
-  line-height: 1.37; overflow-wrap: anywhere;
-  display: -webkit-box; -webkit-box-orient: vertical;
-  -webkit-line-clamp: 4; line-clamp: 4; overflow: hidden;
-}
-.speech.talking { animation-duration: 1.4s; }
-
-/* Dedicated results zone (55–86%). Grid reserves space for the interpretation. */
-.reading {
-  position: absolute; z-index: 3; top: 55%; left: 4.5%; width: 91%; height: 30.5%;
-  display: grid; grid-template-rows: auto auto minmax(0,1fr) auto;
-  row-gap: clamp(3px, .5vh, 10px); padding: 1.5vh 3% 1.3vh;
-  background: linear-gradient(148deg,rgba(24,10,47,.96),rgba(43,19,62,.95));
-  border: 1.5px solid var(--border); border-radius: clamp(19px, 3vw, 32px);
-  box-shadow: 0 15px 38px rgba(10,4,22,.47), 0 0 25px rgba(189,121,252,.19);
-  text-align: center; overflow: visible; animation: reveal .55s ease-out;
-}
-.reading:before {
-  content: ""; position: absolute; left: 23%; right: 23%; top: 0;
-  height: 1px; background: linear-gradient(90deg,transparent,#fff1b6,transparent);
-}
-.reading[hidden] { display: none !important; }
-.reading__eyebrow {
-  color: var(--gold); font: 600 clamp(10px, 1.9vw, 21px) Georgia,serif;
-  letter-spacing: .2em; line-height: 1.3;
-}
-.reading h1 {
-  margin: 0; color: #fff4fb; font-size: clamp(15px, 2.9vw, 32px);
-  line-height: 1.2; overflow-wrap: anywhere;
-}
-.reading__cards {
-  display: flex; align-items: stretch; justify-content: center;
-  gap: 2.5%; margin: 0; min-height: 0; height: 100%; overflow: hidden;
-}
-.tarot-card {
-  display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
-  gap: clamp(4px, .48vh, 8px); width: 52%; max-width: 52%;
-  min-width: 0; min-height: 0; height: 100%; margin: 0;
-  animation: card-appear .65s ease-out backwards;
-}
-.tarot-card:nth-child(2) { animation-delay: .12s; }
-.tarot-card:nth-child(3) { animation-delay: .24s; }
-.tarot-card img {
-  display: block; height: calc(100% - clamp(32px, 3vh, 48px));
-  width: auto; max-width: 100%; min-height: 0; min-width: 0;
-  aspect-ratio: .65; object-fit: contain; background: #2b1a47;
-  border: 2px solid var(--gold); border-radius: 8px;
-  box-shadow: 0 0 18px rgba(247,202,111,.38);
-}
-.tarot-card.is-reversed img { transform: rotate(180deg); }
-.tarot-card figcaption {
-  width: 100%; min-height: 0; color: #ffe4b9;
-  font-size: clamp(11px, 1.93vw, 22px); line-height: 1.12;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-}
-.tarot-card figcaption small {
-  display: block; margin-top: 2px; color: #d4b7ef;
-  font-size: .75em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-}
-.reading__cards:has(.tarot-card:nth-child(2)) .tarot-card { width: 31%; max-width: 31%; }
-.reading__interpretation {
-  min-width: 0; padding-top: clamp(5px, .65vh, 10px);
-  border-top: 1px solid rgba(245,206,153,.24); line-height: 1.25;
-}
-.reading__label {
-  color: var(--gold); font-size: clamp(10px, 1.65vw, 19px);
-  font-weight: 800; letter-spacing: .13em;
-}
-.reading__interpretation p {
-  margin: .35vh auto 0; max-width: 96%;
-  font-size: clamp(11px, 1.87vw, 21px); line-height: 1.28;
-  display: -webkit-box; -webkit-box-orient: vertical;
-  -webkit-line-clamp: 3; line-clamp: 3; overflow: hidden; overflow-wrap: anywhere;
-}
-.reading__gift {
-  position: absolute; top: -1.1vh; right: 3.5%; max-width: 43%;
-  padding: .4vh 1.5vw; border-radius: 30px;
-  color: #fff4fc; background: linear-gradient(120deg,#713b96,#8d419e);
-  box-shadow: 0 2px 11px rgba(20,8,34,.45);
-  font-size: clamp(9px, 1.6vw, 18px); line-height: 1.5;
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-}
-
-/* Footer starts after the card, not on top of the interpretation. */
-.footer {
-  position: absolute; z-index: 5; top: 87%; bottom: 1.4%; left: 5%; right: 5%;
-  display: flex; flex-direction: column; justify-content: space-between;
-  gap: .55vh; min-height: 0; text-align: center;
-}
-.footer__viewer {
-  display: flex; align-items: center; justify-content: center; gap: 1.6vw;
-  min-height: 0; padding: .65vh 2vw;
-  color: #fff4e8; background: rgba(26,12,46,.9);
-  border: 1px solid rgba(239,204,136,.55); border-radius: 15px;
-  font-size: clamp(12px, 2.1vw, 23px); line-height: 1.2;
-  box-shadow: 0 0 16px rgba(207,120,255,.2);
-}
-.footer__viewer span:first-child { color: var(--gold); font-size: 1.2em; flex: none; }
-.footer__viewer span:last-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.footer__cta {
-  align-self: center; width: min(78%, 740px); padding: .55vh 3vw;
-  border: 1.5px solid rgba(255,216,164,.9); border-radius: 100px;
-  background: linear-gradient(110deg,rgba(94,36,135,.97),rgba(154,69,146,.93));
-  box-shadow: 0 0 24px rgba(222,120,255,.32), inset 0 1px 10px rgba(255,233,194,.08);
-  font-size: clamp(15px, 2.8vw, 31px); font-weight: 800; line-height: 1.22;
-}
-.footer__cta small { display: block; font-size: .67em; font-weight: 500; }
-.footer > p {
-  margin: 0; color: #ebd5c8; letter-spacing: .13em;
-  font-size: clamp(8px, 1.35vw, 16px); line-height: 1.25;
-  text-shadow: 0 2px 7px #150a26;
-}
-.sound-toggle {
-  position: absolute; z-index: 10; right: 4%; top: 12%;
-  padding: 8px 12px; border: 1px solid var(--gold);
-  border-radius: 100px; color: #fff; background: #342155;
-  font-size: 12px; cursor: pointer;
-}
-.sound-toggle[hidden] { display: none; }
-.stardust { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
-.stardust i {
-  position: absolute; display: block; width: 6px; height: 6px; border-radius: 100%;
-  background: #fce59f; box-shadow: 0 0 13px 4px #a371ef;
-  animation: twinkle 4s ease-in-out infinite;
-}
-.stardust i:nth-child(1) { top: 15%; left: 12%; }
-.stardust i:nth-child(2) { top: 36%; left: 4%; animation-delay: 1s; }
-.stardust i:nth-child(3) { top: 45%; right: 8%; animation-delay: 2s; }
-.stardust i:nth-child(4) { top: 61%; left: 3%; animation-delay: 3s; }
-.stardust i:nth-child(5) { top: 84%; right: 6%; animation-delay: .7s; }
-.stardust i:nth-child(6) { top: 27%; right: 15%; animation-delay: 1.5s; }
-.stardust i:nth-child(7) { top: 71%; left: 25%; animation-delay: 2.5s; }
-.sr-only {
-  position: absolute !important; width: 1px; height: 1px; padding: 0; margin: -1px;
-  overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0;
-}
-@keyframes twinkle { 0%,100% { opacity: .3; transform: scale(.65); } 50% { opacity: 1; transform: scale(1.3); } }
-@keyframes halo { 50% { transform: scale(1.05); opacity: .8; } }
-@keyframes float { 50% { transform: translateY(-12px); } }
-@keyframes bubble { 50% { transform: translateY(-3px); } }
-@keyframes reveal { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: none; } }
-@keyframes card-appear { from { opacity: 0; transform: scale(.55) rotateY(65deg); } to { opacity: 1; transform: none; } }
-
-/* Narrow phones keep the face right of the speech and all bands separate. */
-@media (max-aspect-ratio: 3/5) {
-  .host { top: 13%; right: -16%; width: 99%; height: 41.5%; }
-  .speech { top: 20%; left: 3.5%; width: 48%; }
-  .reading { top: 55%; height: 30.5%; }
-}
-@media (max-width: 420px) {
-  .brand__row { padding-inline: 2%; }
-  .brand small { letter-spacing: .15em; }
-  .speech { padding-inline: 3.2%; border-radius: 17px 17px 17px 7px; }
-  .reading { padding-inline: 2.6%; }
-  .footer__cta { width: 85%; }
-}
-/* Short mobile viewports need extra height for the reading; hide only ornament copy. */
-@media (max-height: 680px) and (max-aspect-ratio: 1/1) {
-  .host { top: 12%; height: 40%; }
-  .speech { top: 18%; max-height: 19%; padding-block: 9px; }
-  .reading { top: 52.5%; height: 35%; padding-block: 1vh; }
-  .footer { top: 88.5%; bottom: 1.5%; gap: .5vh; }
-  .footer > p { display: none; }
-  .footer__cta { padding-block: .4vh; }
-}
-/* Landscape preview: results on left; character and ticker on right. */
-@media (min-aspect-ratio: 1/1) {
-  .brand { top: 2%; left: 18%; right: 18%; }
-  .host { top: 12%; right: 1%; width: 52%; height: 67%; }
-  .host__name { right: 15%; bottom: 8%; }
-  .speech { top: 19%; left: 5%; width: 38%; max-height: 20%; }
-  .reading { top: 42%; left: 5%; width: 45%; height: 54%; }
-  .footer { top: 80%; bottom: 2%; left: 56%; right: 5%; }
-  .reading__cards:has(.tarot-card:nth-child(2)) .tarot-card { width: 32%; max-width: 32%; }
-}
-@media (prefers-reduced-motion: reduce) {
-  *, *:before, *:after {
-    animation-duration: .01ms !important; animation-iteration-count: 1 !important;
-    transition-duration: .01ms !important;
-  }
-}
+.aurora{position:absolute;inset:0;z-index:-1;pointer-events:none;
+  background:radial-gradient(ellipse at 69% 31%,rgba(161,96,250,.26),transparent 51%),
+             radial-gradient(ellipse at 14% 73%,rgba(245,177,105,.12),transparent 46%)}
+.with-background .aurora{background:radial-gradient(ellipse at 65% 36%,rgba(176,111,255,.29),transparent 61%)}
+.brand{position:absolute;z-index:6;top:3%;left:5%;right:5%;text-align:center;
+  filter:drop-shadow(0 5px 16px #14091c)}
+.brand__row{display:flex;justify-content:center;align-items:center;gap:clamp(5px,1.7vw,20px);
+  width:100%;max-width:800px;margin:0 auto;padding:clamp(8px,1.2vh,22px) 3%;
+  border:1.5px solid var(--line);border-radius:100px;
+  background:linear-gradient(110deg,rgba(21,9,36,.95),rgba(39,17,60,.92));
+  box-shadow:inset 0 0 14px rgba(250,214,150,.08),0 0 28px rgba(194,113,239,.17)}
+.brand__row strong{font:italic 500 clamp(19px,3.6vw,43px) Georgia,serif;color:var(--gold);white-space:nowrap}
+.brand__moon,.brand__star{font-size:clamp(18px,4.3vw,49px);color:var(--gold)}
+.brand__live{display:inline-block;padding:.35em .65em;border-radius:10px;
+  background:#f83f80;color:#fff;font-size:clamp(11px,2.7vw,28px);font-weight:800;letter-spacing:.05em;white-space:nowrap}
+.brand small{display:block;margin-top:1vh;font-size:clamp(8px,1.4vw,17px);
+  letter-spacing:.21em;color:#e4c9d0;text-shadow:0 3px 8px #100618}
+.host{position:absolute;z-index:1;top:13%;right:-5%;width:97%;height:45%;pointer-events:none}
+.host canvas{position:relative;z-index:2;display:block;width:100%;height:100%;outline:0;
+  opacity:0;transition:opacity .5s ease;filter:drop-shadow(0 8px 22px rgba(26,4,42,.45))}
+.host.is-loaded canvas{opacity:1}
+.host__halo{position:absolute;z-index:0;top:13%;left:26%;width:70%;aspect-ratio:1;border-radius:50%;
+  border:2px solid rgba(246,212,151,.28);
+  background:radial-gradient(circle,rgba(135,70,200,.12),transparent 70%);
+  box-shadow:0 0 0 13px rgba(200,130,250,.055),0 0 72px rgba(198,121,247,.2),
+    inset 0 0 50px rgba(243,210,154,.1);animation:halo 7s ease-in-out infinite}
+.host__halo::before{content:"☾";position:absolute;right:-6%;top:-13%;
+  font-size:clamp(35px,7vw,76px);color:var(--gold);filter:drop-shadow(0 0 12px #e5aa6b)}
+.host__name{position:absolute;z-index:3;bottom:0;right:10%;
+  color:var(--gold);font:600 clamp(12px,2.45vw,27px) Georgia,serif;
+  letter-spacing:.16em;text-shadow:0 2px 13px #381253}
+.host__fallback{position:absolute;z-index:1;top:26%;left:38%;font-size:clamp(70px,16vw,190px);
+  filter:drop-shadow(0 0 30px #9b50e9);animation:float 5s ease-in-out infinite}
+.host__fallback span{font-size:.4em}
+.host.is-loaded .host__fallback{display:none}
+.speech{position:absolute;z-index:5;top:22%;left:4%;width:48%;max-height:25%;
+  padding:clamp(12px,2.2vh,29px) clamp(12px,2.6vw,31px);border:1.5px solid #f8dbba;
+  border-radius:25px 25px 25px 9px;color:#361d50;
+  background:linear-gradient(140deg,rgba(255,249,255,.98),rgba(238,209,250,.97));
+  box-shadow:0 5px 20px rgba(230,163,252,.24),0 13px 36px rgba(21,7,37,.4);
+  transform-origin:80% 100%;animation:bubble 4.4s ease-in-out infinite}
+.speech::after{content:"";position:absolute;right:8%;bottom:-12px;width:23px;height:23px;
+  border-right:1.5px solid #f8dbba;border-bottom:1.5px solid #f8dbba;
+  background:#eed5f6;transform:rotate(45deg)}
+.speech__spark{position:absolute;right:3%;top:-18px;color:#ba80e7;font-size:30px}
+.speech__title{display:block;margin:0 0 .75vh;
+  font-size:clamp(13px,2.6vw,27px);font-weight:800;line-height:1.25;overflow-wrap:anywhere}
+.speech__message{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:4;
+  overflow:hidden;margin:0;font-size:clamp(12px,2.35vw,25px);line-height:1.38;overflow-wrap:anywhere}
+.speech.talking{animation-duration:1.6s}
+.reading{position:absolute;z-index:4;top:58%;left:5%;width:90%;height:29%;
+  display:grid;grid-template-rows:auto auto minmax(0,1fr) auto;
+  gap:clamp(3px,.45vh,9px);padding:clamp(10px,1.25vh,24px) clamp(12px,2.8vw,30px);
+  border:1.5px solid var(--line);border-radius:clamp(19px,3vw,32px);
+  background:linear-gradient(155deg,rgba(26,12,49,.96),rgba(48,19,64,.95));
+  box-shadow:0 13px 39px rgba(14,6,28,.56),0 0 29px rgba(182,105,240,.18);
+  text-align:center;animation:reveal .5s ease-out}
+.reading[hidden]{display:none!important}
+.no-webgl .host__fallback{display:block}
+.no-webgl #host3d{display:none}
+.reading__eyebrow{color:var(--gold);font:600 clamp(10px,1.75vw,20px) Georgia,serif;letter-spacing:.19em}
+.reading h1{margin:0;color:#fff2fb;font-size:clamp(16px,3.1vw,32px);line-height:1.2;overflow-wrap:anywhere}
+.reading__cards{display:flex;align-items:stretch;justify-content:center;
+  min-height:0;width:100%;height:100%;gap:2.7%;overflow:hidden}
+.tarot-card{display:flex;flex:0 1 auto;flex-direction:column;align-items:center;
+  justify-content:flex-start;gap:clamp(2px,.28vh,6px);
+  min-width:0;min-height:0;height:100%;margin:0;animation:card-appear .65s ease-out backwards}
+.tarot-card:nth-child(2){animation-delay:.1s}
+.tarot-card:nth-child(3){animation-delay:.2s}
+.tarot-card img{display:block;height:72%;min-height:0;width:auto;max-width:100%;
+  aspect-ratio:.65;object-fit:contain;border:2px solid var(--gold);
+  border-radius:7px;background:#24143b;box-shadow:0 0 12px rgba(245,208,131,.3)}
+.tarot-card.is-reversed img{transform:rotate(180deg)}
+.tarot-card figcaption{width:100%;max-width:100%;color:#f8e4cb;
+  font-size:clamp(11px,2.05vw,23px);line-height:1.1;overflow-wrap:anywhere}
+.tarot-card figcaption small{display:block;color:#d7b8ed;font-size:.77em;margin-top:2px}
+.reading__cards:has(.tarot-card:nth-child(2)) .tarot-card{width:31%;max-width:31%}
+.reading__interpretation{min-height:0;overflow:hidden;border-top:1px solid rgba(242,213,156,.24);padding-top:clamp(3px,.45vh,7px)}
+.reading__label{color:var(--gold);font-size:clamp(10px,1.8vw,18px);
+  letter-spacing:.14em;font-weight:800}
+.reading__interpretation p{display:-webkit-box;-webkit-box-orient:vertical;
+  -webkit-line-clamp:2;overflow:hidden;margin:2px 0 0;line-height:1.25;
+  font-size:clamp(11px,1.85vw,21px);color:#f2e1f7}
+.reading__gift{position:absolute;top:-13px;right:5%;max-width:48%;
+  padding:5px 13px;border:1px solid rgba(238,200,157,.4);border-radius:25px;
+  background:#6c3185;color:#fff;font-size:clamp(10px,1.65vw,18px);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.footer{position:absolute;z-index:5;top:89%;bottom:1%;left:5%;right:5%;text-align:center}
+.footer__viewer{display:flex;gap:9px;justify-content:center;align-items:center;
+  min-height:34px;padding:clamp(7px,1vh,15px) 9px;margin:0 0 .9vh;
+  border:1px solid var(--line);border-radius:20px;background:var(--glass);
+  box-shadow:0 0 13px rgba(190,106,249,.19);font-size:clamp(11px,2.25vw,23px);
+  overflow:hidden}
+.footer__viewer span:first-child{font-size:1.1em;color:var(--gold);flex:none}
+.footer__viewer span:last-child{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.footer__cta{width:80%;max-width:700px;margin:auto;padding:clamp(8px,1vh,18px) 14px;
+  border:2px solid rgba(245,202,159,.78);border-radius:55px;
+  background:linear-gradient(110deg,#612581,#843b86);
+  box-shadow:0 0 19px rgba(222,127,254,.3);
+  font-size:clamp(14px,2.6vw,28px);line-height:1.2;font-weight:800}
+.footer__cta small{display:block;font-size:.72em;font-weight:400;margin-top:2px}
+.footer>p{margin:.85vh 0 0;font-size:clamp(8px,1.3vw,16px);
+  letter-spacing:.1em;color:#e3cabc;text-shadow:0 2px 6px #140919}
+.sound-toggle{position:absolute;z-index:8;top:13%;right:3%;padding:9px 13px;
+  border:1px solid var(--gold);border-radius:20px;background:#32194b;color:white;cursor:pointer}
+.stardust{position:absolute;inset:0;overflow:hidden;pointer-events:none}
+.stardust i{position:absolute;width:6px;height:6px;border-radius:50%;background:#fce4a6;
+  box-shadow:0 0 12px 4px #9560ce;animation:twinkle 4s ease-in-out infinite}
+.stardust i:nth-child(1){top:15%;left:12%}.stardust i:nth-child(2){top:36%;left:4%;animation-delay:1s}
+.stardust i:nth-child(3){top:44%;right:8%;animation-delay:2s}
+.stardust i:nth-child(4){top:62%;left:3%;animation-delay:3s}
+.stardust i:nth-child(5){top:86%;right:6%;animation-delay:.7s}
+.stardust i:nth-child(6){top:27%;right:15%;animation-delay:1.5s}
+.stardust i:nth-child(7){top:72%;left:25%;animation-delay:2.5s}
+.sr-only{position:absolute!important;width:1px;height:1px;padding:0;margin:-1px;
+  overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+@keyframes twinkle{0%,100%{opacity:.25;transform:scale(.7)}50%{opacity:1;transform:scale(1.25)}}
+@keyframes halo{50%{transform:scale(1.045);opacity:.78}}
+@keyframes float{50%{transform:translateY(-12px)}}
+@keyframes bubble{50%{transform:translateY(-3px)}}
+@keyframes reveal{from{opacity:0;transform:translateY(18px)}to{opacity:1;transform:translateY(0)}}
+@keyframes card-appear{from{opacity:0;transform:scale(.65) rotateY(36deg)}to{opacity:1;transform:none}}
+@media(max-aspect-ratio:3/5){.host{top:15%;height:43%;right:-7%}.speech{top:22%;width:49%}
+  .reading{top:57.5%;height:30%}.footer{bottom:1.8%}}
+@media(min-aspect-ratio:1/1){.brand{top:2%}.host{top:8%;right:1%;width:55%;height:83%}
+  .speech{top:19%;left:5%;width:39%}.reading{top:49%;left:5%;width:48%;height:38%}
+  .footer{left:16%;right:16%;bottom:1%}}
+@media(max-height:680px){.brand{top:1%}
+  .host{top:12%;height:45%}.speech{top:21%;padding:9px}
+  .reading{top:56%;height:31%;padding:9px}.reading__cards{min-height:0}
+  .footer{bottom:1%}.footer>p{display:none}}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;
+  animation-iteration-count:1!important;transition-duration:.01ms!important}}

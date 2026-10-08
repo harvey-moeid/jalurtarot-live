@@ -211,7 +211,7 @@ URL OBS Browser Source baru (LIVE 1 tetap di `/live`):
 
 Pengaturan OBS yang disarankan: **width 1080, height 1920** (9:16), browser source refresh on scene activation bila diperlukan, dan browser source audio dikontrol OBS bila memakai `voice=1`.
 
-LIVE 2 menggunakan endpoint **GET /api/live/state** dan konfigurasi gift/like yang **sama** dengan LIVE 1. Tiap draw terbaru memunculkan 1–3 kartu aktual, user, dan ringkasan dari data `aspect.nasib` selama 45 detik. Karakter **WebGL 3D stylized procedural** bergerak ringan saat idle dan bereaksi saat ramalan; ini **bukan model realistis yang identik dengan mockup gambar**, dan tidak memerlukan CDN/asset 3D eksternal. Kecepatan render dibatasi sekitar 30 FPS, dengan fallback bila WebGL tidak didukung, serta mematuhi reduce motion.
+LIVE 2 menggunakan endpoint **GET /api/live/state** dan konfigurasi gift/like yang **sama** dengan LIVE 1. Tiap draw terbaru memunculkan 1–3 kartu aktual, user, dan ringkasan dari data `aspect.nasib` selama 45 detik. Karakter bernama **Jalur Tarot** (sebelumnya Luna Tarot) kini dimuat dari **model GLB lokal** (`public/models/jalur-tarot.glb`) melalui **Three.js + GLTFLoader** yang disimpan lokal (`public/vendor/`); tidak menggunakan CDN runtime. Model bergaya stylized/chibi 3D, **bukan** karakter realistis hasil sculpt/rig Blender. Mata berkedip, kepala dan tangan bergerak, mulut bereaksi ketika teks dibacakan, dan bagian depan kartu yang dipegang memuat gambar kartu hasil draw. Renderer dibatasi ~30 FPS, memiliki fallback ketika WebGL/model gagal, serta mematuhi reduce motion.
 
 ### LIVE 2 — layout portrait yang diperbarui
 
@@ -225,6 +225,15 @@ Tampilan /live2 disusun dalam **empat zona terpisah**: judul di atas, karakter L
 - Data gift/like, polling dan webhook tetap menggunakan backend yang sama dengan LIVE 1.
 
 Keamanan: tidak perlu API key di browser, tidak ada parameter trigger publik baru, nama user dan pesan dipasang melalui `textContent`, dan path gambar kartu dibatasi ke `/cards/*.jpg`. Gunakan tombol test draw pada `/admin/live` untuk menguji dengan hasil aktual.
+
+#### Pemeliharaan LIVE 2
+
+- Script `public/live2.js` menangani event tarot dan renderer; `public/live2.css` mengatur layout portrait untuk layar browser dan OBS.
+- Aset Three.js **r146** dan `GLTFLoader` dibundel sebagai file statis yang dipin versi, dengan lisensi `public/vendor/THREE-LICENSE.txt`. Browser memuatnya dari origin situs sendiri, sesuai CSP.
+- Model `public/models/jalur-tarot.glb` adalah aset glTF 2.0 biner original; node bernama `Head`, `LeftArm`, `RightArm`, `EyeLeft`, `EyeRight`, `Mouth`, dan `HeldCardFace` dipakai animasi. Pastikan nama node ini tetap ada ketika mengganti model dengan hasil Blender.
+- Pengujian termasuk validasi struktur GLB. Demo `/live2?demo=1&background=1` tidak mengirim event TikTok dan tidak mengubah KV.
+- Jika font, WebGL, atau gambar tarot bermasalah, sistem menampilkan fallback; gift dan webhook di Worker tidak diubah oleh pembaruan tampilan.
+- Setelah PR di-merge ke `master` dan CI deploy berhasil, refresh source Browser OBS untuk mengambil aset baru.
 
 ### 5. Setup OBS
 
