@@ -88,6 +88,8 @@ test('integration checks: authenticated admin, webhook and like fallback', async
   assert.match(connector, /eventType === 'like'/);
   assert.match(connector, /eventMarkerKey\(event\)/);
   assert.match(live, /getConnectorEvents\(env, 'gift,like'/);
+  assert.match(live, /Legacy TikTok listener dinonaktifkan/);
+  assert.match(live, /connector-webhook/);
   assert.match(live, /isAuthenticated\(c\)/);
   assert.match(live, /draw\.triggerType==="like"/);
   assert.match(overlay, /triggerType\?: 'gift' \| 'like'/);
