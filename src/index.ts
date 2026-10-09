@@ -1,4 +1,5 @@
 import { Hono } from 'hono';
+export { LiveReadingQueue } from './lib/liveQueueObject';
 import api, { type Env } from './routes/api';
 import admin, { getBannerPublic } from './routes/admin';
 import { homePage } from './routes/home';
