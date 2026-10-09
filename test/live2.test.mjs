@@ -17,7 +17,7 @@ test('LIVE 2 has a dedicated 9:16 overlay, assets and accessible labels', async 
   assert.match(entry, /app\.get\('\/live'/, 'LIVE 1 route must remain intact');
   assert.match(html, /id="host3d"/);
   assert.match(html, /id="host-portrait"/);
-  assert.match(html, /\/models\/jalur-tarot-host\.webp/);
+  assert.match(html, /\/models\/jalur-tarot-host\.svg/);
   assert.match(html, /id="host-model-debug"/);
   assert.match(html, /src="\/live2\.js\?v=20261009-4"/);
   assert.match(html, /href="\/live2\.css\?v=20261009-4"/);
