@@ -8,7 +8,7 @@ export function live2OverlayPage(): string {
 <meta name="theme-color" content="#110b20">
 <meta name="color-scheme" content="dark">
 <title>Jalur Tarot — LIVE 2 Magical Host</title>
-<link rel="stylesheet" href="/live2.css?v=20261009-5">
+<link rel="stylesheet" href="/live2.css?v=20261009-7">
 <script src="/vendor/three.r146.min.js" defer></script>
 <script src="/vendor/GLTFLoader.r146.js" defer></script>
 <script src="/live2.js?v=20261009-6" defer></script>
@@ -43,7 +43,7 @@ export function live2OverlayPage(): string {
   </section>
   <footer class="footer">
     <div class="footer__viewer"><span aria-hidden="true">☾</span><span id="viewer-label">Menanti energi baik...</span></div>
-    <div class="footer__cta"><span aria-hidden="true">🎁</span> Kirim Gift atau Capai Target Like <small>pilih topik di komentar: cinta · nasib · karir</small></div>
+    <div class="footer__cta"><span aria-hidden="true">🎁</span> Gift atau Target Like = Ramalan <small>komentar: cinta · nasib · karir</small></div>
     <p>SETIAP KARTU ADALAH PESAN ✧ SETIAP KAMU PUNYA CERITA</p>
   </footer>
   <button class="sound-toggle" id="sound-toggle" type="button" hidden aria-pressed="false">🔊 Aktifkan suara</button>
