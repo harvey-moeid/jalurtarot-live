@@ -90,7 +90,8 @@ tiktok-live-konektor (Render)
                 ↓
 Cloudflare Worker jalurtarot-live
         ↓  pengaturan KV, filter gift/like + dedupe + pilih spread
-tarik kartu → simpan KV live:current
+tarik kartu → simpan ke SQLite Durable Object LIVE_QUEUE (antrean persisten)
+       ↓  mirror legacy live:current di KV untuk kompatibilitas
         ↓
 GET /api/live/state
         ↓
@@ -190,8 +191,8 @@ mungkin membutuhkan waktu singkat untuk propagasi antar lokasi Cloudflare.
   Preferensi counter memakai `totalLikeCount` jika tersedia; selain itu, menjumlah
   `likeCount` dari event yang masuk. Event dengan ID sama dicegah diproses ulang
   secara best-effort; lonjakan melewati beberapa milestone memicu maksimal satu draw
-  per event. KV **tidak menyediakan increment atomik**; untuk live sangat ramai,
-  gunakan Durable Objects agar tidak terjadi race penghitungan.
+  per event. Penghitungan like dan deduplikasi gift/like kini dilakukan **secara atomik**
+  di Durable Object SQLite (sebelumnya KV tidak menyediakan increment atomik).
 - Pada konektor Render, webhook harus dikonfigurasi untuk event `chat`, `gift`, dan `like`.
   REST polling tersedia sebagai fallback, bukan pengganti webhook yang andal.
 - API feed `/api/live/connector/{status,stats,events}` hanya dapat diakses
@@ -218,7 +219,7 @@ mungkin membutuhkan waktu singkat untuk propagasi antar lokasi Cloudflare.
 
 **Tes admin:** `/admin/live` → **Coba Manual** → isi Topik Demo dan Komentar Demo → tarik kartu, lalu lihat hasil di LIVE 1 atau LIVE 2. Demo browser `?demo=1` tidak memakai webhook atau memodifikasi KV.
 
-**Catatan produksi:** KV bukan antrean transaksi atomik. Komentar/event yang sangat berdekatan dapat terlambat terbaca atau tertimpa, dan `live:current` hanya menyimpan satu bacaan terbaru. Untuk beban ramai yang memerlukan urutan dan jaminan satu bacaan per penonton, tingkatkan ke Durable Objects/Queue. Tidak ada klaim voice lip-sync 3D asli karena host standar berupa ilustrasi animasi.
+**Catatan produksi:** Antrean pembacaan gift/like menggunakan SQLite Durable Object `LIVE_QUEUE` sebagai sumber data (bukan lagi `live:current` di KV). Setiap gift valid dan milestone like masuk log persisten, dideduplikasi berdasarkan ID event+room+jenis, dan hitungan like diproses atomik. LIVE 1 dan LIVE 2 menggunakan **cursor lokal independen**, tidak ada endpoint publik untuk menandai pembacaan milik OBS lain sebagai selesai. Setiap overlay menyelesaikan pembacaannya sebelum melanjutkan; gift didahulukan namun like mendapat giliran setelah paling banyak tiga gift berturut-turut. Data dibatasi maksimal **2.000 bacaan terbaru / umur 6 jam** untuk menjaga kapasitas; lalu dibersihkan sehingga antrean tidak menjamin penyampaian tanpa batas jika banyak sekali event masuk saat tidak ada overlay aktif. Cursor disimpan di browser/OBS `localStorage`; memuat overlay pada browser baru dimulai dari posisi ujung antrean (tidak memutar kembali kejadian lama). Komentar dan permasalahan memilih topik dari KV masih best-effort; tidak ada klaim voice lip-sync 3D asli.
 
 
 ### Karakter utama LIVE 2 (9 Oktober 2026)
@@ -315,6 +316,17 @@ File tampilan LIVE 1 dipisahkan menjadi `public/live1.css` dan `public/live1.js`
 Untuk uji coba tanpa live TikTok beneran, buka `/admin/live` — ada tombol test draw manual dan pengaturan gift/like.
 
 ---
+
+
+### Smart Reading Queue — LIVE 1 & LIVE 2 (SQLite Durable Object)
+
+**Tidak perlu D1.** Dalam `wrangler.toml`, binding `LIVE_QUEUE` dan migration `new_sqlite_classes=["LiveReadingQueue"]` dibuat otomatis saat deployment. Durable Object SQLite tersedia pada Workers Free, tunduk pada batas kuota Cloudflare.
+
+Alur: webhook gift valid/like milestone → SQLite Durable Object (idempotent dan atomik) → `GET /api/live/queue` → LIVE 1 selama **45 detik** / LIVE 2 hingga narasi selesai (maks. **130 detik**) → cursor browser ditandai selesai → pembacaan berikutnya. Event saat pembacaan berlangsung **tidak memotong** hasil aktif. LIVE 2 bisa selesai lebih lambat daripada LIVE 1 karena memiliki cursor berbeda. Urutan pemilihan: gift lebih dulu, lalu satu like setelah tiga gift agar like tidak kelaparan. Maksimal 2.000 hasil terbaru dan umur antrean 6 jam; yang lebih tua akan kedaluwarsa. Ini **bukan sistem guaranteed-delivery tanpa batas**, karena batas umur, kuota, dan storage localStorage pada OBS.
+
+Saat OBS sudah aktif, cursor tersimpan sebagai `jalurtarot:queue:v1:live1` atau `jalurtarot:queue:v1:live2` di `localStorage`. **Jangan membersihkan storage OBS saat siaran** karena browser baru mulai dari posisi antrean saat itu dan event sebelumnya tidak direplay. Event yang sedang tampil ketika reload akan diputar ulang agar tidak hilang. Jika gagal membaca Durable Object, overlay mempertahankan layar idle/bacaan yang ada dan mencoba lagi.
+
+`/api/live/state` dipertahankan hanya untuk integrasi lama; LIVE 1 dan LIVE 2 sekarang memakai endpoint read-only `/api/live/queue`. Skrip `public/live-queue.js` mesti dimuat sebelum skrip kedua overlay. Pastikan setelah merge/deploy lakukan **Refresh cache of current page** di OBS. Koneksi `tiktok-live-konektor`, akun Cloudflare, dan izin untuk membuat SQLite Durable Objects harus tersedia.
 
 ## CI / CD
 
@@ -448,8 +460,8 @@ Tiga gaya interpretasi untuk `/reading` & `/daily` (Ramalan Live selalu memakai 
 
 - `tiktok-live-connector` adalah reverse-engineering pihak ketiga — bisa berhenti bekerja jika TikTok mengubah sistem internalnya.
 - Service `tiktok-live-konektor` harus dalam status Connected saat live. Autostart tidak diwajibkan; START/STOP tetap dikontrol dari dashboard konektor.
-- `live:current` hanya menyimpan 1 draw terakhir — event gift/like yang masuk hampir bersamaan hanya menampilkan yang paling baru.
-- Milestone like dihitung best-effort menggunakan KV; dalam traffic tinggi, penambahan bersamaan bisa menyebabkan hitungan tidak tepat.
+- `live:current` hanya mirror kompatibilitas untuk endpoint lama `/api/live/state`; event gift/like sekarang masuk `LIVE_QUEUE` Durable Object SQLite sebelum mirror, sehingga tidak saling menimpa pada overlay terbaru. Balasan webhook tetap melaporkan ID ramalan yang diterima. Bacaan dibaca terpisah di LIVE 1 dan LIVE 2; browser baru tidak mereplay backlog lama.
+- Milestone like kini dihitung dengan transaksi SQLite Durable Object dan deduplikasi event. Counter room direset setelah 6 jam tidak aktif. Komentar yang terkait gift/like tetap menggunakan KV dan pemilihan topik saat event sangat berdekatan masih best-effort.
 - Overlay polling tiap ~2 detik — ada delay ±2 detik antara trigger dan tampil di layar.
 - Bundle size — `cards.ts` + `enrichedMeanings.ts` + `liveAspectMeanings.ts` cukup besar, pantau jika mendekati limit 1MB Workers free tier.
 - `routes/agent.ts` dan `lib/config.ts` (legacy dari versi Oracle berbasis AI) masih ada di kode tapi tidak lagi terhubung ke fitur aktif — aman diabaikan.
