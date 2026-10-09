@@ -283,7 +283,6 @@
   async function poll() {
     if (polling || demo) return;
     if (document.hidden) { schedule(3000); return; }
-    if (queue && activeId !== null) { schedule(1200); return; }
     polling = true;
     if (queue) {
       try {
@@ -291,7 +290,7 @@
         const count = document.getElementById('queue-indicator');
         if (count) count.textContent = payload.pending > 0
           ? 'Antrean ' + payload.pending + ' bacaan' : '';
-        if (payload.item) {
+        if (payload.item && activeId === null) {
           activeQueueItem = payload.item;
           if (Array.isArray(payload.item.draw?.cards) && payload.item.draw.cards.length) {
             present(payload.item.draw);
