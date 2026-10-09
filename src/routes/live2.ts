@@ -23,7 +23,7 @@ export function live2OverlayPage(): string {
   <div class="stardust" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
   <section class="host" aria-label="Host tarot 3D">
     <div class="host__halo" aria-hidden="true"></div>
-    <img id="host-portrait" class="host__portrait" src="/models/jalur-tarot-host.webp?v=20261009-1" width="280" height="288" alt="Karakter Jalur Tarot bergaya fantasi 3D memegang kartu tarot" fetchpriority="high" decoding="async">
+    <img id="host-portrait" class="host__portrait" src="/models/jalur-tarot-host.svg?v=20261009-1" width="680" height="750" alt="Karakter Jalur Tarot bergaya fantasi 3D memegang kartu tarot" fetchpriority="high" decoding="async">
     <canvas id="host3d" aria-label="Mode eksperimental model tiga dimensi Jalur Tarot"></canvas>
     <div class="host__debug" id="host-model-debug" role="status" aria-live="polite" hidden></div>
     <div class="host__fallback" aria-hidden="true">🔮<span>✦</span></div>

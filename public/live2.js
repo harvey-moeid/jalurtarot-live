@@ -1,4 +1,4 @@
-/* LIVE 2: realtime tarot, no API keys in browser. WebGL 3D host drawn locally. */
+/* LIVE 2: secure tarot state and illustrated host; legacy 3D is opt-in. */
 (function () {
   'use strict';
 
@@ -98,7 +98,7 @@
     activeUntil = 0;
     speakingUntil = 0;
     speech.classList.remove('talking');
-    document.querySelector('.host')?.classList.remove('is-reading');
+    document.querySelector?.('.host')?.classList.remove('is-reading');
     speechTitle.textContent = 'Selamat datang di LIVE ✨';
     speechMessage.textContent = 'Kirim gift atau kumpulkan like untuk membuka pesan dari kartu tarot.';
     document.getElementById('viewer-label').textContent = 'Menanti energi baik...';
@@ -126,7 +126,7 @@
     speechMessage.textContent = brief(message, 115);
     speakingUntil = Date.now() + Math.min(16_000, Math.max(3800, message.length * 80));
     speech.classList.add('talking');
-    document.querySelector('.host')?.classList.add('is-reading');
+    document.querySelector?.('.host')?.classList.add('is-reading');
     document.getElementById('reading-name').textContent = 'Untuk ' + username;
     document.getElementById('reading-summary').textContent = message;
     document.getElementById('viewer-label').textContent = username + ' · ' + (isLike ? 'Terima kasih untuk like!' : 'Terima kasih sudah hadir!');
@@ -405,7 +405,7 @@
       mixer.clipAction(gltf.animations[0]).play();
     }
     refreshHeldCard();
-    document.querySelector('.host')?.classList.add('is-loaded');
+    document.querySelector?.('.host')?.classList.add('is-loaded');
     resize();
     renderFrame(0);
     reportModel(custom ? 'custom' : 'legacy',
@@ -630,7 +630,7 @@
   canvas.addEventListener('webglcontextlost', function (event) {
     event.preventDefault();
     cancelAnimationFrame(frameHandle);
-    document.querySelector('.host')?.classList.remove('is-loaded');
+    document.querySelector?.('.host')?.classList.remove('is-loaded');
     reportModel('error', 'Konteks WebGL hilang.');
     overlay.classList.add('no-webgl');
   });
