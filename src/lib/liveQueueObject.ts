@@ -31,18 +31,19 @@ export class LiveReadingQueue {
     )`);
     sql.exec(`CREATE TABLE IF NOT EXISTS room_likes (
       room TEXT PRIMARY KEY,
-      count INTEGER NOT NULL DEFAULT 0
+      count INTEGER NOT NULL DEFAULT 0,
+      updated_at INTEGER NOT NULL DEFAULT 0
     )`);
   }
 
   private prune(now: number) {
     if (now - this.lastSweep < 300_000) return;
     this.lastSweep = now;
-    this.state.storage.sql.exec('DELETE FROM readings WHERE created_at < ?', now - 3_600_000);
+    this.state.storage.sql.exec('DELETE FROM readings WHERE created_at < ?', now - 21_600_000);
     this.state.storage.sql.exec('DELETE FROM processed_events WHERE created_at < ?', now - 21_600_000);
     // An upper bound protects the free storage plan even under burst traffic.
     this.state.storage.sql.exec(
-      'DELETE FROM readings WHERE seq < (SELECT COALESCE(MAX(seq),0)-499 FROM readings)',
+      'DELETE FROM readings WHERE seq < (SELECT COALESCE(MAX(seq),0)-1999 FROM readings)',
     );
   }
 
@@ -76,15 +77,15 @@ export class LiveReadingQueue {
       if (sql.exec<{ event_key: string }>(
         'SELECT event_key FROM processed_events WHERE event_key=? LIMIT 1',body.eventKey,
       ).toArray().length) return { accepted: true, duplicate: true };
-      const row = sql.exec<{ count: number }>(
-        'SELECT count FROM room_likes WHERE room=? LIMIT 1',body.room,
+      const row = sql.exec<{ count: number; updated_at:number }>(
+        'SELECT count,updated_at FROM room_likes WHERE room=? LIMIT 1',body.room,
       ).toArray()[0];
-      const previous = row?.count ?? 0;
-      const before = !row && body.total > 0 ? Math.max(0,body.total-body.delta) : previous;
+      const previous = row && now-row.updated_at < 21_600_000 ? row.count : 0;
+      const before = previous===0 && body.total > 0 ? Math.max(0,body.total-body.delta) : previous;
       const count = body.total > 0 ? Math.max(previous,body.total) : previous+body.delta;
       if (!Number.isSafeInteger(count)) throw new Error('Like counter overflow');
       sql.exec('INSERT INTO processed_events(event_key,created_at) VALUES (?,?)',body.eventKey,now);
-      sql.exec('INSERT INTO room_likes(room,count) VALUES (?,?) ON CONFLICT(room) DO UPDATE SET count=excluded.count',body.room,count);
+      sql.exec('INSERT INTO room_likes(room,count,updated_at) VALUES (?,?,?) ON CONFLICT(room) DO UPDATE SET count=excluded.count,updated_at=excluded.updated_at',body.room,count,now);
       if (crossedLikeMilestone(before,count,body.milestone)) {
         this.add(body.eventKey,'like',body.draw,now);
         return { accepted: true, duplicate: false, drawId: body.draw.id };
@@ -104,7 +105,7 @@ export class LiveReadingQueue {
         COALESCE(MAX(CASE WHEN kind='like' THEN seq END),0) AS like FROM readings`).one();
       return { initialized: true, cursor: { gift: max.gift, like: max.like, giftsStreak: 0 }, pending: 0 };
     }
-    const minAge=Date.now()-3_600_000;
+    const minAge=Date.now()-21_600_000;
     const gifts=sql.exec<{ seq:number;draw_json:string;created_at:number }>(
       `SELECT seq,draw_json,created_at FROM readings WHERE kind='gift' AND seq>? AND created_at>=? ORDER BY seq LIMIT 1`,
       cursor.gift,minAge,
