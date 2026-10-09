@@ -278,6 +278,17 @@ Keamanan: tidak perlu API key di browser, tidak ada parameter trigger publik bar
 - Jika setelah unggah `public/models/jalur-tarot-custom.glb` karakter LIVE 2 masih lama, buka `/live2?demo=1&background=1&debug=1`. Label 3D `CUSTOM` menunjukkan GLB berhasil, `LOADING` saat mengunduh, `FALLBACK` saat gagal sehingga memakai karakter bawaan, dan `UNAVAILABLE` ketika WebGL/library tidak tersedia. Lihat peringatan console untuk penyebab teknis. Label ini **hanya** tampil dengan `debug=1`.
 - Asset LIVE 2 menggunakan cache-busting (`?v=...`) di JS/CSS/model GLB dan route `/live2` mengirim `Cache-Control: no-store` agar upload model tidak tertahan 404 atau script lama pada browser/OBS.
 
+### Fullscreen LIVE 1 dan LIVE 2 (Oktober 2026)
+
+Kedua overlay kini memakai kontrol fullscreen bersama (`public/overlay-fullscreen.js` dan `public/overlay-fullscreen.css`) yang mengisi viewport desktop, HP, portrait, atau landscape tanpa mengganti sistem data atau layout asli.
+
+- Buka `https://livejalur.muidsoft.com/live?demo=1&background=1&controls=1` atau `https://livejalur.muidsoft.com/live2?demo=1&background=1&controls=1` untuk uji tombol **Layar Penuh**. Klik untuk masuk; klik lagi atau tekan **Esc** untuk keluar. Shortcut **F** berfungsi saat fokus berada di halaman, bukan kolom input.
+- Dalam siaran biasa, tombol hanya muncul saat ada interaksi mouse/sentuh lalu otomatis hilang sehingga tidak mengganggu overlay OBS. Tambahkan `?controls=1` untuk selalu terlihat ketika preview; tambahkan `?controls=0` untuk **tidak menampilkan tombol sama sekali** (direkomendasikan bagi OBS). Parameter lain dapat digabung dengan `&`.
+- Fullscreen browser menggunakan Fullscreen API dan **harus dimulai lewat klik/tap**; bukan otomatis saat memuat situs. Browser tertentu, terutama beberapa versi iOS Safari dan iframe tertentu, mungkin tidak mendukungnya; gunakan mode layar penuh bawaan browser bila tersedia.
+- **OBS Browser Source berbeda dari fullscreen browser**: ukurannya berasal dari lebar/tinggi Browser Source dan transformasi source di OBS. Untuk menutup seluruh canvas OBS, atur sumber ke **1080 × 1920 (portrait)** atau **1920 × 1080 (landscape)** dan gunakan **Transform → Fit to Screen (Ctrl+F)**. Tombol HTML fullscreen tidak menggantikan pengaturan ini.
+- Baik `/live` maupun `/live2` tetap memperbarui posisi berdasarkan aspect ratio dan safe area perangkat. LIVE 1 tetap hanya muncul saat bacaan dari gift/like, kecuali `?demo=1`; LIVE 2 tetap menampilkan host ketika menunggu. Tidak ada perubahan pada gift/like, webhook, polling, ataupun voice.
+- Sesudah deploy, refresh cache Browser Source OBS agar skrip dan CSS fullscreen baru termuat.
+
 ### 5. Setup OBS
 
 Tambahkan **Browser Source** di OBS, arahkan ke:
