@@ -287,7 +287,7 @@ Kedua overlay kini memakai kontrol fullscreen bersama (`public/overlay-fullscree
 - Dalam siaran biasa, tombol hanya muncul saat ada interaksi mouse/sentuh lalu otomatis hilang sehingga tidak mengganggu overlay OBS. Tambahkan `?controls=1` untuk selalu terlihat ketika preview; tambahkan `?controls=0` untuk **tidak menampilkan tombol sama sekali** (direkomendasikan bagi OBS). Parameter lain dapat digabung dengan `&`.
 - Fullscreen browser menggunakan Fullscreen API dan **harus dimulai lewat klik/tap**; bukan otomatis saat memuat situs. Browser tertentu, terutama beberapa versi iOS Safari dan iframe tertentu, mungkin tidak mendukungnya; gunakan mode layar penuh bawaan browser bila tersedia.
 - **OBS Browser Source berbeda dari fullscreen browser**: ukurannya berasal dari lebar/tinggi Browser Source dan transformasi source di OBS. Untuk menutup seluruh canvas OBS, atur sumber ke **1080 × 1920 (portrait)** atau **1920 × 1080 (landscape)** dan gunakan **Transform → Fit to Screen (Ctrl+F)**. Tombol HTML fullscreen tidak menggantikan pengaturan ini.
-- Baik `/live` maupun `/live2` tetap memperbarui posisi berdasarkan aspect ratio dan safe area perangkat. LIVE 1 tetap hanya muncul saat bacaan dari gift/like, kecuali `?demo=1`; LIVE 2 tetap menampilkan host ketika menunggu. Tidak ada perubahan pada gift/like, webhook, polling, ataupun voice.
+- Baik `/live` maupun `/live2` tetap memperbarui posisi berdasarkan aspect ratio dan safe area perangkat. LIVE 1 sekarang menampilkan layar idle premium saat menunggu, lalu hasil bacaannya muncul saat gift/like dan kembali ke idle setelah 45 detik. Untuk penggunaan OBS transparan seperti versi lama, tambahkan `?idle=off` pada URL. LIVE 2 tetap menampilkan host ketika menunggu. Tidak ada perubahan pada gift/like, webhook, polling, ataupun voice.
 - Sesudah deploy, refresh cache Browser Source OBS agar skrip dan CSS fullscreen baru termuat.
 
 ### 5. Setup OBS
@@ -296,9 +296,13 @@ Tambahkan **Browser Source** di OBS, arahkan ke:
 ```
 https://livejalur.muidsoft.com/live
 ```
-LIVE 1 kini otomatis responsif untuk Browser Source OBS **portrait 1080×1920** maupun **landscape 1920×1080**. Canvas transparan saat tidak ada ramalan; begitu bacaan dipicu, desain latar ungu gelap dan panel beraksen emas tampil selama 45 detik. Gunakan `?background=1` untuk gradasi latar penuh saat sedang ada bacaan.
+LIVE 1 kini otomatis responsif untuk Browser Source OBS **portrait 1080×1920** maupun **landscape 1920×1080**. Saat tidak ada bacaan, tampil layar idle magis berwarna ungu dengan branding Jalur Tarot, tiga punggung kartu, status menunggu, petunjuk komentar, dan instruksi gift/target like. Kartu menggunakan CSS lokal (tanpa gambar/API tambahan) dan gerak ringan yang menghormati `prefers-reduced-motion`. Ketika gift/target like memicu ramalan, idle disembunyikan dan panel hasil bacaan muncul; **45 detik kemudian idle kembali**. Tidak ada perubahan logika webhook, state, gift atau like.
+
+**Pilihan OBS:** URL standar `/live` menampilkan layar idle (tidak hitam/kosong) secara default. Jika layar OBS perlu transparan sebelum dan sesudah bacaan karena ditumpuk di atas video lain, gunakan `/live?idle=off` untuk mengembalikan perilaku versi lama. Opsi `?background=1` tetap berlaku untuk latar ketika hasil ramalan tampil; `?demo=1` mempertahankan contoh bacaan untuk pemeriksaan tampilan.
 
 **Preview LIVE 1 (tidak memanggil webhook, tidak menyimpan draw ke KV):**
+- Mode idle: `https://livejalur.muidsoft.com/live` (menunggu ketika tidak ada hasil baru)
+- Mode transparan untuk OBS: `https://livejalur.muidsoft.com/live?idle=off`
 - 3 kartu topik cinta: `https://livejalur.muidsoft.com/live?demo=1&background=1&topic=cinta`
 - 1 kartu topik karier: `https://livejalur.muidsoft.com/live?demo=1&background=1&topic=karir&spread=single`
 - 3 kartu topik nasib: `https://livejalur.muidsoft.com/live?demo=1&background=1&topic=nasib`
@@ -306,7 +310,7 @@ LIVE 1 kini otomatis responsif untuk Browser Source OBS **portrait 1080×1920** 
 
 Kartu dan bacaan dipisah: **portrait** menampilkan kartu di atas dan teks di bawah, sedangkan **landscape** menampilkan kartu di kiri dan teks di kanan. Narasi humanis mengikuti topik komentar, ditampilkan utuh dalam panel yang **dapat digulir manual** dan **bergulir otomatis selama 45 detik** jika melebihi tinggi viewport. Preferensi reduce-motion akan mematikan autoscroll. Input dari komentar, nama, dan gift dirender sebagai teks bukan HTML; kartu memakai aset lokal yang dibatasi ke `/cards/`.
 
-File tampilan LIVE 1 dipisahkan menjadi `public/live1.css` dan `public/live1.js`. `/live` memakai `Cache-Control: no-store` dan query versi untuk meminimalkan cache usang di OBS. Setelah deploy, klik **Refresh cache of current page** pada Browser Source OBS. LIVE 2, webhook TikTok, dan aturan gift/like tetap tidak diubah.
+File tampilan LIVE 1 dipisahkan menjadi `public/live1.css` dan `public/live1.js`. `/live` memakai `Cache-Control: no-store` dan query versi untuk meminimalkan cache usang di OBS. Gunakan cache-busting `v=20261010-1` untuk kedua aset pada versi idle premium. Setelah deploy, klik **Refresh cache of current page** pada Browser Source OBS. LIVE 2, webhook TikTok, dan aturan gift/like tetap tidak diubah.
 
 Untuk uji coba tanpa live TikTok beneran, buka `/admin/live` — ada tombol test draw manual dan pengaturan gift/like.
 
