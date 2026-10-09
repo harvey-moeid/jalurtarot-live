@@ -27,9 +27,9 @@ class FakeSql {
       assert.equal(this.processed.has(a[0]),false,'duplicate event key');
       this.processed.set(a[0],a[1]);
     } else if (query.startsWith('select count from room_likes')) {
-      if(this.counts.has(a[0])) rows=[{count:this.counts.get(a[0])}];
+      if(this.counts.has(a[0])) rows=[{count:this.counts.get(a[0]).count,updated_at:this.counts.get(a[0]).updated_at}];
     } else if (query.startsWith('insert into room_likes')) {
-      this.counts.set(a[0],a[1]);
+      this.counts.set(a[0],{count:a[1],updated_at:a[2]});
     } else if (query.startsWith('insert into readings')) {
       if(this.readings.some(item=>item.event_key===a[0])) throw new Error('duplicate reading');
       this.readings.push({seq:++this.sequence,event_key:a[0],kind:a[1],
@@ -39,7 +39,7 @@ class FakeSql {
     } else if (query.startsWith('delete from processed_events')) {
       for(const [key,at] of this.processed) if(at<a[0]) this.processed.delete(key);
     } else if (query.startsWith('delete from readings where seq')) {
-      this.readings=this.readings.filter(item=>item.seq>=Math.max(0,this.sequence-499));
+      this.readings=this.readings.filter(item=>item.seq>=Math.max(0,this.sequence-1999));
     } else if (query.includes('coalesce(max(case when')) {
       const max = kind => Math.max(0,...this.readings.filter(r=>r.kind===kind).map(r=>r.seq));
       rows=[{gift:max('gift'),like:max('like')}];
@@ -108,7 +108,7 @@ test('like milestone and dedupe happen together, not as racy KV read/modify/writ
   assert.equal(b.drawId,'b');
   const again=await send('/offer/like',{eventKey:'like2',room:'roomA',delta:3,total:0,milestone:5,draw:draw('b2','like')});
   assert.equal(again.duplicate,true);
-  assert.equal(sql.counts.get('roomA'),6);
+  assert.equal(sql.counts.get('roomA').count,6);
   assert.equal(sql.readings.length,1);
 });
 
