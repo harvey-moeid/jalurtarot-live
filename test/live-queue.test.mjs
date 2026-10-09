@@ -65,7 +65,7 @@ function harness() {
     serverCode
       .replace("import { crossedLikeMilestone } from './liveSettings';", inlinePolicy)
       .replace('export class LiveReadingQueue', 'class LiveReadingQueue') +
-    '\nexports.LiveReadingQueue = LiveReadingQueue;',
+    String.fromCharCode(10) + 'exports.LiveReadingQueue = LiveReadingQueue;',
     { mode:'strip' },
   );
   const exports = {};
