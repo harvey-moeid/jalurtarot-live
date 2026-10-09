@@ -197,7 +197,7 @@
     cancelNarration(); // New gift/like always starts a fresh conversation.
     lastId = id;
     activeId = id;
-    activeUntil = Date.now() + HIDE_AFTER_MS;
+    activeUntil = Date.now() + MAX_READING_MS;
 
     const username = safeText(draw.username, 36) || 'Penonton';
     const message = utteranceFor(draw);
