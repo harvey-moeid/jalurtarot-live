@@ -13,21 +13,36 @@ function block(selector) {
   return match[1];
 }
 
-function percent(selector, key) {
-  const found = block(selector).match(new RegExp('(?:^|;)\\s*' + key + ':\\s*([\\d.]+)%'));
-  assert.ok(found, selector + ' needs an explicit ' + key + ' percentage');
-  return Number(found[1]);
-}
+test('portrait places host + bubble above result and CTA in dedicated grid rows', () => {
+  assert.match(block('.live2'), /display:\\s*grid/);
+  assert.match(block('.live2'), /grid-template-columns:minmax\\(0,1fr\\)/);
+  assert.match(block('.live2'), /grid-template-rows:minmax\\(0,9fr\\) minmax\\(0,45fr\\) minmax\\(0,30fr\\) minmax\\(0,16fr\\)/);
+  for (const area of ['.host', '.speech']) {
+    assert.match(block(area), /grid-column:1;grid-row:2/);
+  }
+  assert.match(block('.reading'), /grid-column:1;grid-row:3/);
+  assert.match(block('.footer'), /grid-column:1;grid-row:4/);
+  assert.match(block('.reading'), /overflow:hidden/);
+  assert.match(block('.footer'), /min-height:0/);
+});
 
-test('mobile portrait overlay allocates disjoint result and footer zones', () => {
-  const hostBottom = percent('.host', 'top') + percent('.host', 'height');
-  const resultTop = percent('.reading', 'top');
-  const resultBottom = resultTop + percent('.reading', 'height');
-  const footerTop = percent('.footer', 'top');
-  assert.ok(hostBottom <= resultTop, 'character must end before results');
-  assert.ok(resultBottom < footerTop, 'ticker must start below the card');
-  assert.ok(percent('.speech', 'top') + percent('.speech', 'max-height') < resultTop,
-    'speech must stay inside the upper stage');
+test('landscape allocates a right character stage, left reading and full-width footer', () => {
+  const landscape = css.slice(css.indexOf('@media (min-aspect-ratio:1/1)'));
+  assert.match(landscape, /grid-template-columns:minmax\\(0,52fr\\) minmax\\(0,48fr\\)/);
+  assert.match(landscape, /\\.host\\{grid-row:2;grid-column:2/);
+  assert.match(landscape, /\\.speech\\{grid-row:2;grid-column:1/);
+  assert.match(landscape, /\\.reading\\{grid-row:2;grid-column:1/);
+  assert.match(landscape, /\\.footer\\{grid-row:3;grid-column:1\\/-1/);
+  assert.match(landscape, /\\.footer>p\\{display:none\\}/);
+});
+
+test('small portrait and short landscape preserve text while reducing decoration', () => {
+  assert.match(css, /@media \\(max-aspect-ratio:3\\/5\\)/);
+  assert.match(css, /@media \\(max-height:740px\\)/);
+  assert.match(css, /@media \\(max-height:480px\\) and \\(min-aspect-ratio:1\\/1\\)/);
+  assert.match(css, /\\.reading__eyebrow\\{display:none\\}/);
+  assert.match(css, /\\.footer__cta small\\{display:none\\}/);
+  assert.match(css, /\\.host__portrait\\{height:92%/);
 });
 
 test('results keep a real flexing area for up to three cards and an interpretation', () => {
