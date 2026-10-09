@@ -75,11 +75,12 @@ test('Live settings are persisted without TTL and read back', async () => {
 });
 
 test('integration checks: authenticated admin, webhook and like fallback', async () => {
-  const [admin, connector, live, overlay] = await Promise.all([
+  const [admin, connector, live, overlay, liveOne] = await Promise.all([
     readFile(new URL('../src/routes/admin.ts', import.meta.url), 'utf8'),
     readFile(new URL('../src/lib/tiktokConnector.ts', import.meta.url), 'utf8'),
     readFile(new URL('../src/routes/live.ts', import.meta.url), 'utf8'),
     readFile(new URL('../src/lib/live.ts', import.meta.url), 'utf8'),
+    readFile(new URL('../public/live1.js', import.meta.url), 'utf8'),
   ]);
   assert.match(admin, /admin\.post\('\/live\/settings'/);
   assert.match(admin, /origin !== new URL\(c\.req\.url\)\.origin/);
@@ -94,6 +95,6 @@ test('integration checks: authenticated admin, webhook and like fallback', async
   assert.match(live, /Legacy TikTok listener dinonaktifkan/);
   assert.match(live, /connector-webhook/);
   assert.match(live, /isAuthenticated\(c\)/);
-  assert.match(live, /draw\.triggerType==="like"/);
+  assert.match(liveOne, /draw\.triggerType === 'like'/);
   assert.match(overlay, /triggerType\?: 'gift' \| 'like'/);
 });
