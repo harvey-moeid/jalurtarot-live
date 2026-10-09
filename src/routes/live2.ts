@@ -9,9 +9,11 @@ export function live2OverlayPage(): string {
 <meta name="color-scheme" content="dark">
 <title>Jalur Tarot — LIVE 2 Magical Host</title>
 <link rel="stylesheet" href="/live2.css?v=20261009-7">
+<link rel="stylesheet" href="/overlay-fullscreen.css?v=20261009-1">
 <script src="/vendor/three.r146.min.js" defer></script>
 <script src="/vendor/GLTFLoader.r146.js" defer></script>
 <script src="/live2.js?v=20261009-6" defer></script>
+<script src="/overlay-fullscreen.js?v=20261009-1" defer></script>
 </head>
 <body>
 <main class="live2" id="live2" aria-label="Overlay ramalan tarot TikTok Live">
@@ -49,6 +51,10 @@ export function live2OverlayPage(): string {
   <button class="sound-toggle" id="sound-toggle" type="button" hidden aria-pressed="false">🔊 Aktifkan suara</button>
   <span class="sr-only" id="live-status" role="status">Menunggu pembacaan tarot.</span>
 </main>
+<div class="overlay-fullscreen-control" id="overlay-fullscreen-control">
+  <button class="overlay-fullscreen-button" id="overlay-fullscreen-button" type="button" aria-label="Masuk layar penuh" aria-pressed="false" title="Masuk layar penuh"><span class="overlay-fullscreen-icon" aria-hidden="true">⛶</span><span class="overlay-fullscreen-label">Layar Penuh</span></button>
+</div>
+<div class="overlay-fullscreen-status" id="overlay-fullscreen-status" role="status" aria-live="polite" hidden></div>
 </body>
 </html>`;
 }
