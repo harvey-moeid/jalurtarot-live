@@ -234,7 +234,7 @@ test('alternative GLB decoder recovers uploaded model if primary loader fails', 
     TextureLoader: class { load() {} },
     GLTFLoader: class { load(path, success, progress, fail) { fail(new Error('Primary loader failed')); } },
     Group, Mesh, Box3,
-    Vector3: class { x = 0; y = 0; z = 0 },
+    Vector3: class { x = 0; y = 0; z = 0; set(x, y, z) { this.x = x; this.y = y; this.z = z; return this; } },
     BufferGeometry: Geometry,
     BufferAttribute: class {
       constructor(array, itemSize) { this.array = array; this.itemSize = itemSize; }
