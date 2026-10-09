@@ -210,7 +210,7 @@
     if (!draw || !Array.isArray(draw.cards) || draw.cards.length < 1) return;
     if (typeof draw.id !== 'string' && typeof draw.id !== 'number') return;
     const eventAge = Date.now() - Number(draw.createdAt);
-    if (!demo && (!Number.isFinite(eventAge) || eventAge < -15_000 || eventAge > MAX_CLIENT_AGE_MS)) return;
+    if (!demo && !queue && (!Number.isFinite(eventAge) || eventAge < -15_000 || eventAge > MAX_CLIENT_AGE_MS)) return;
     const id = String(draw.id);
     if (id === lastId) return;
     cancelNarration(); // New gift/like always starts a fresh conversation.
