@@ -59,7 +59,7 @@ async function syncRecentConnectorEvents(env: LiveEnv): Promise<void> {
   lastConnectorSyncAt = now;
 
   const sync = (async () => {
-    const payload = await getConnectorEvents(env, 'gift,like', 100);
+    const payload = await getConnectorEvents(env, 'chat,gift,like', 100);
     const events = Array.isArray(payload?.events) ? [...payload.events].reverse() : [];
     for (const event of events) {
       const timestamp = Date.parse(String(event?.timestamp || ''));
