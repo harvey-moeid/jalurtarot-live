@@ -61,7 +61,8 @@ export class LiveReadingQueue {
       ).toArray().length > 0;
       if (exists) return { accepted: true, duplicate: true };
       sql.exec('INSERT INTO processed_events(event_key,created_at) VALUES (?,?)',body.eventKey,now);
-      this.add(body.eventKey,'gift',body.draw,now);
+      // Manual preview can be a like reading without changing any like counters.
+      this.add(body.eventKey,body.draw.triggerType==='like' ? 'like' : 'gift',body.draw,now);
       return { accepted: true, duplicate: false, drawId: body.draw.id };
     });
     this.prune(now);
@@ -130,7 +131,9 @@ export class LiveReadingQueue {
     try {
       if (url.pathname === '/offer/gift' && request.method === 'POST') {
         const input=await request.json() as { eventKey:string;draw:LiveDraw };
-        if (!validEvent(input.eventKey,input.draw,'gift')) return Response.json({error:'invalid gift'}, {status:400});
+        if (!validEvent(input.eventKey,input.draw) || !['gift','like'].includes(input.draw.triggerType || 'gift')) {
+          return Response.json({error:'invalid gift'}, {status:400});
+        }
         return Response.json(this.gift(input));
       }
       if (url.pathname === '/offer/like' && request.method === 'POST') {
@@ -158,9 +161,9 @@ export class LiveReadingQueue {
     }
   }
 }
-function validEvent(key: unknown, draw: LiveDraw, kind: QueueKind): boolean {
+function validEvent(key: unknown, draw: LiveDraw, kind?: QueueKind): boolean {
   return typeof key === 'string' && key.length>0 && key.length<=220 &&
     draw && typeof draw.id==='string' && draw.id.length<=120 &&
-    draw.triggerType===kind && Array.isArray(draw.cards) && draw.cards.length>0 &&
+    (!kind || draw.triggerType===kind) && Array.isArray(draw.cards) && draw.cards.length>0 &&
     typeof draw.createdAt==='number' && Number.isFinite(draw.createdAt);
 }
