@@ -1,4 +1,5 @@
 import { generateLiveDraw, saveLiveDraw, type LiveSpreadId } from './live';
+import { rememberLiveComment, selectLiveComment, markLiveCommentRead } from './liveComment';
 
 export type TikTokConnectorEnv = {
   RATE_LIMIT_KV: KVNamespace;
@@ -178,8 +179,15 @@ async function processLike(
   let drawId: string | undefined;
   if (crossed) {
     // Satu draw per event agar lonjakan like tidak menimpa overlay berkali-kali.
-    const draw = generateLiveDraw(spreadId, normalizedViewerName(event), milestone + ' Like', milestone, 'like');
+    const requester = normalizedViewerName(event);
+    // Room milestone can resolve the latest eligible viewer request, even when
+    // another viewer happens to send the like that crosses the threshold.
+    const comment = await selectLiveComment(env, String(event.roomId || event.username || 'unknown'), requester, true);
+    const recipient = comment?.username || requester;
+    const draw = generateLiveDraw(spreadId, recipient, milestone + ' Like', milestone, 'like',
+      comment ? { topic: comment.topic, question: comment.question } : undefined);
     if (!await saveLiveDraw(env, draw)) throw new Error('Gagal menyimpan draw like ke KV.');
+    if (comment) await markLiveCommentRead(env, comment);
     drawId = draw.id;
   }
   await env.RATE_LIMIT_KV.put(counterKey, JSON.stringify({ count }), { expirationTtl: PROCESSED_EVENT_TTL_SECONDS });
@@ -193,12 +201,25 @@ export async function processConnectorEvent(
 ): Promise<ProcessedEventResult> {
   if (!event || typeof event !== 'object') return { accepted: false, ignored: 'invalid_event' };
   const eventType = String(event.event || '').toLowerCase();
+  const marker = eventMarkerKey(event);
+  if (eventType === 'chat') {
+    // Chat only selects a topic. It must never trigger draw generation by itself.
+    if (!marker) return { accepted: false, ignored: 'chat_event_without_id' };
+    if (await env.RATE_LIMIT_KV.get(marker)) return { accepted: true, duplicate: true };
+    const stored = await rememberLiveComment(env, {
+      id: String(event.id), room: String(event.roomId || event.username || 'unknown'),
+      username: normalizedViewerName(event), message: event.data?.message,
+      timestamp: event.timestamp,
+    });
+    // Store a marker for irrelevant chat too, keeping REST fallback inexpensive.
+    await env.RATE_LIMIT_KV.put(marker, '1', { expirationTtl: PROCESSED_EVENT_TTL_SECONDS });
+    return { accepted: true, ignored: stored ? 'topic_saved_awaiting_trigger' : 'comment_without_topic' };
+  }
   if (eventType !== 'gift' && eventType !== 'like') {
     return { accepted: false, ignored: 'event_not_used_for_draw' };
   }
 
   const settings = await getLiveSettings(env);
-  const marker = eventMarkerKey(event);
   if (eventType === 'like') {
     if (!settings.likeEnabled) return { accepted: false, ignored: 'like_disabled' };
     return processLike(env, event, settings.likeMilestone, settings.likeSpread, marker);
@@ -227,8 +248,13 @@ export async function processConnectorEvent(
   }
 
   const spreadId: LiveSpreadId = totalValue >= settings.threeCardMinValue ? 'three-card' : settings.defaultSpread;
-  const draw = generateLiveDraw(spreadId, normalizedViewerName(event), giftName, repeatCount, 'gift');
+  // A gift uses ONLY its sender's pending comment, never another viewer's.
+  const comment = await selectLiveComment(env, String(event.roomId || event.username || 'unknown'),
+    normalizedViewerName(event), false);
+  const draw = generateLiveDraw(spreadId, normalizedViewerName(event), giftName, repeatCount, 'gift',
+    comment ? { topic: comment.topic, question: comment.question } : undefined);
   if (!await saveLiveDraw(env, draw)) throw new Error('Gagal menyimpan draw connector ke KV.');
+  if (comment) await markLiveCommentRead(env, comment);
 
   if (marker) await env.RATE_LIMIT_KV.put(marker, '1', { expirationTtl: PROCESSED_EVENT_TTL_SECONDS });
   return { accepted: true, drawId: draw.id };

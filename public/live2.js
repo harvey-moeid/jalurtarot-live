@@ -66,7 +66,9 @@
   function utteranceFor(draw) {
     const card = draw.cards[0];
     const aspect = card && card.aspect && card.aspect.nasib;
-    return brief(aspect || draw.summary || 'Ikuti suara hati dan temukan pesanmu hari ini.', 200);
+    // Narration is authored server-side and follows the comment topic.
+    // Legacy draws without narration retain their existing fallback.
+    return brief(draw.narration || aspect || draw.summary || 'Ikuti suara hati dan temukan pesanmu hari ini.', 650);
   }
   function markTalking() {
     return Date.now() < speakingUntil;
@@ -100,7 +102,7 @@
     speech.classList.remove('talking');
     document.querySelector?.('.host')?.classList.remove('is-reading');
     speechTitle.textContent = 'Selamat datang di LIVE ✨';
-    speechMessage.textContent = 'Kirim gift atau kumpulkan like untuk membuka pesan dari kartu tarot.';
+    speechMessage.textContent = 'Tulis CINTA, NASIB, atau KARIR di komentar. Ramalan muncul setelah gift atau target like tercapai.';
     document.getElementById('viewer-label').textContent = 'Menanti energi baik...';
     status.textContent = 'Menunggu pembacaan tarot.';
     try { if ('speechSynthesis' in window) speechSynthesis.cancel(); } catch (_) {}
@@ -122,7 +124,13 @@
     const isLike = draw.triggerType === 'like';
     const giftName = safeText(draw.giftName, 80);
     // A shorter bubble protects the character; the reading panel keeps the full message.
-    speechTitle.textContent = 'Ramalan untuk ' + brief(username, 23);
+    const topics = { cinta: 'Cinta', karir: 'Karier', nasib: 'Nasib' };
+    const titleTopic = topics[draw.topic];
+    speechTitle.textContent = titleTopic
+      ? 'Bacaan ' + titleTopic + ' untuk ' + brief(username, 23)
+      : 'Ramalan untuk ' + brief(username, 23);
+    const readingLabel = document.querySelector?.('.reading__label');
+    if (readingLabel) readingLabel.textContent = titleTopic ? 'PESAN ' + titleTopic.toUpperCase() : 'PESAN KARTU';
     speechMessage.textContent = brief(message, 115);
     speakingUntil = Date.now() + Math.min(16_000, Math.max(3800, message.length * 80));
     speech.classList.add('talking');
@@ -164,6 +172,8 @@
 
   const demoDraw = {
     id: 'demo-live2-1', createdAt: Date.now(), username: '@penonton',
+    topic: 'cinta', question: 'Bagaimana hubungan cintaku ke depan?',
+    narration: 'Halo @penonton, aku baca pertanyaanmu tentang cinta. Kita lihat pesannya, ya. Kartu The Moon mengajak kamu mendengarkan intuisi dan tidak terburu-buru mengambil kesimpulan. Kartu The Star menunjukkan harapan, sementara The Sun membawa kehangatan baru. Pelan-pelan saja, tetap jaga komunikasi yang sehat.',
     triggerType: 'gift', giftName: 'Rose', giftCount: 1,
     cards: [
       { nameCn: 'The Moon', image: '/cards/major/18-moon.jpg', positionNameCn: 'Saat Ini', aspect: { nasib: 'Dengarkan suara hatimu. Ada kebenaran yang mulai terlihat, dan intuisi akan membimbing langkahmu.' } },

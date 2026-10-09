@@ -8,10 +8,10 @@ export function live2OverlayPage(): string {
 <meta name="theme-color" content="#110b20">
 <meta name="color-scheme" content="dark">
 <title>Jalur Tarot — LIVE 2 Magical Host</title>
-<link rel="stylesheet" href="/live2.css?v=20261009-5">
+<link rel="stylesheet" href="/live2.css?v=20261009-7">
 <script src="/vendor/three.r146.min.js" defer></script>
 <script src="/vendor/GLTFLoader.r146.js" defer></script>
-<script src="/live2.js?v=20261009-4" defer></script>
+<script src="/live2.js?v=20261009-6" defer></script>
 </head>
 <body>
 <main class="live2" id="live2" aria-label="Overlay ramalan tarot TikTok Live">
@@ -32,7 +32,7 @@ export function live2OverlayPage(): string {
   <section class="speech" id="speech" aria-live="polite" aria-atomic="true">
     <div class="speech__spark" aria-hidden="true">✧</div>
     <span class="speech__title" id="speech-title">Selamat datang di LIVE ✨</span>
-    <p class="speech__message" id="speech-message">Kirim gift atau kumpulkan like untuk membuka pesan dari kartu tarot.</p>
+    <p class="speech__message" id="speech-message">Tulis CINTA, NASIB, atau KARIR di komentar. Ramalan muncul setelah gift atau target like tercapai.</p>
   </section>
   <section class="reading" id="reading" aria-label="Hasil pembacaan kartu tarot" hidden>
     <div class="reading__eyebrow">✧ KARTU RAMALAN ✧</div>
@@ -43,7 +43,7 @@ export function live2OverlayPage(): string {
   </section>
   <footer class="footer">
     <div class="footer__viewer"><span aria-hidden="true">☾</span><span id="viewer-label">Menanti energi baik...</span></div>
-    <div class="footer__cta"><span aria-hidden="true">🎁</span> Kirim Gift di TikTok <small>untuk membuka ramalan pribadi</small></div>
+    <div class="footer__cta"><span aria-hidden="true">🎁</span> Gift atau Target Like = Ramalan <small>komentar: cinta · nasib · karir</small></div>
     <p>SETIAP KARTU ADALAH PESAN ✧ SETIAP KAMU PUNYA CERITA</p>
   </footer>
   <button class="sound-toggle" id="sound-toggle" type="button" hidden aria-pressed="false">🔊 Aktifkan suara</button>

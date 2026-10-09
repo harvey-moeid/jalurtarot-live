@@ -28,6 +28,7 @@
  */
 
 import { drawCardsForSpread } from './draw';
+import type { LiveTopic } from './liveComment';
 import { getSpreadById } from './spreads';
 import { liveAspectMeanings } from './liveAspectMeanings';
 import type { DrawnCard } from './types';
@@ -56,6 +57,9 @@ export interface LiveDraw {
   triggerType?: 'gift' | 'like';
   cards: LiveCardView[];
   summary: string;
+  narration?: string;
+  topic?: LiveTopic;
+  question?: string;
 }
 
 const STATE_KEY = 'live:current';
@@ -79,26 +83,41 @@ function buildCardView(dc: DrawnCard): LiveCardView {
   };
 }
 
-/**
- * Susun ringkasan ramalan singkat - cocok untuk teks overlay live, bukan bacaan panjang.
- * Ikon ditulis sebagai token `::nama::` (bukan emoji unicode), di-render jadi SVG
- * inline oleh overlay (lihat fungsi md() di routes/live.ts, liveOverlayPage()).
- */
-function buildSummary(cards: LiveCardView[], spreadId: LiveSpreadId, username: string): string {
-  const nama = username?.trim() || 'Kamu';
-
-  if (spreadId === 'single') {
-    const c = cards[0];
-    // Spasi hanya ditambahkan bila terbalik, supaya tidak ada spasi sisa di dalam ** **.
-    const judul = `${c.nameCn}${c.isReversed ? ' (terbalik)' : ''}`;
-    return `::spark:: Ramalan untuk ${nama}\n\n**${judul}**\nKata kunci: ${c.keywords.join(', ')}\n\n::heart:: Hubungan: ${c.aspect.hubungan}\n::briefcase:: Karir: ${c.aspect.karir}\n::crystal:: Nasib: ${c.aspect.nasib}`;
+/** Natural, contextual reading for both overlays without a paid AI dependency. */
+export function buildLiveNarration(
+  cards: LiveCardView[], username: string,
+  request?: { topic?: LiveTopic; question?: string },
+): string {
+  if (!cards.length) return '';
+  const viewer = String(username || 'Penonton').replace(/[<>\u0000-\u001f]/g, '').slice(0, 46);
+  const topic = request?.topic;
+  const aspect = topic === 'cinta' ? 'hubungan' : topic === 'karir' ? 'karir' : 'nasib';
+  const label = topic === 'cinta' ? 'percintaan' : topic === 'karir' ? 'karier' : topic === 'nasib' ? 'nasib dan peluang' : 'energi hidupmu';
+  const question = String(request?.question || '').replace(/[<>\u0000-\u001f]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 100);
+  const intro = question
+    ? `Halo ${viewer}, aku baca pertanyaanmu: "${question}". Sekarang kita lihat pesannya untuk ${label}, ya.`
+    : `Halo ${viewer}, terima kasih sudah hadir. Kita lihat pesan kartu untuk ${label}, ya.`;
+  function meaning(card: LiveCardView, max = 125): string {
+    const full = String(card.aspect?.[aspect] || card.keywords.join(', ') || '')
+      .replace(/::[a-z]+::/g, '').replace(/[\r\n*]+/g, ' ').replace(/\s+/g, ' ').trim();
+    if (full.length <= max) return full;
+    const part = full.slice(0, max + 1);
+    const stop = part.lastIndexOf(' ');
+    return part.slice(0, stop > max * .55 ? stop : max).trim() + '…';
   }
-
-  const [past, present, future] = cards;
-  const line = (c: LiveCardView, label: string) =>
-    `**${label} - ${c.nameCn}${c.isReversed ? ' (terbalik)' : ''}**\n::crystal:: ${c.aspect.nasib}`;
-
-  return `::spark:: Ramalan Masa Lalu - Kini - Masa Depan untuk ${nama}\n\n${line(past, 'Masa Lalu')}\n\n${line(present, 'Saat Ini')}\n\n${line(future, 'Masa Depan')}`;
+  const modes = ['Kartu pertama', 'Kartu kedua', 'Kartu ketiga'];
+  const body = cards.slice(0, 3).map((card, index) => {
+    const position = cards.length === 1 ? 'Kartu yang muncul' : modes[index];
+    const orientation = card.isReversed ? ' dalam posisi terbalik' : '';
+    const explanation = meaning(card, cards.length === 1 ? 170 : 104);
+    return `${position} adalah ${card.nameCn}${orientation}. ${explanation}`;
+  }).join(' ');
+  const ending = topic === 'cinta'
+    ? 'Pelan-pelan saja, dengarkan perasaanmu dan tetap jaga komunikasi yang sehat.'
+    : topic === 'karir'
+      ? 'Ambil sisi baiknya untuk langkah kerja berikutnya, tanpa terburu-buru mengambil keputusan.'
+      : 'Ingat, kartu ini untuk refleksi; pilihan dan langkah nyatamu tetap yang paling menentukan.';
+  return [intro, body, ending].filter(Boolean).join(' ');
 }
 
 export function generateLiveDraw(
@@ -107,10 +126,13 @@ export function generateLiveDraw(
   giftName?: string,
   giftCount?: number,
   triggerType: 'gift' | 'like' = 'gift',
+  request?: { topic?: LiveTopic; question?: string },
 ): LiveDraw {
   const spread = getSpreadById(spreadId) ?? getSpreadById('single')!;
   const drawn = drawCardsForSpread(spread);
   const cards = drawn.map(buildCardView);
+
+  const narration = buildLiveNarration(cards, username, request);
 
   return {
     id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
@@ -122,7 +144,10 @@ export function generateLiveDraw(
     giftCount,
     triggerType,
     cards,
-    summary: buildSummary(cards, spreadId, username),
+    summary: narration,
+    narration,
+    ...(request?.topic ? { topic: request.topic } : {}),
+    ...(request?.question ? { question: request.question.slice(0, 160) } : {}),
   };
 }
 
