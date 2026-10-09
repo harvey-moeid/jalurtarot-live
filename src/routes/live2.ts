@@ -8,11 +8,11 @@ export function live2OverlayPage(): string {
 <meta name="theme-color" content="#110b20">
 <meta name="color-scheme" content="dark">
 <title>Jalur Tarot — LIVE 2 Magical Host</title>
-<link rel="stylesheet" href="/live2.css?v=20261010-1">
+<link rel="stylesheet" href="/live2.css?v=20261010-2">
 <link rel="stylesheet" href="/overlay-fullscreen.css?v=20261009-1">
 <script src="/vendor/three.r146.min.js" defer></script>
 <script src="/vendor/GLTFLoader.r146.js" defer></script>
-<script src="/live2.js?v=20261010-1" defer></script>
+<script src="/live2.js?v=20261010-2" defer></script>
 <script src="/overlay-fullscreen.js?v=20261009-1" defer></script>
 </head>
 <body>

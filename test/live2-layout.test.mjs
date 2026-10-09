@@ -65,7 +65,20 @@ test('stage supports transparent OBS, 9:16, short phone, desktop and reduce-moti
   assert.match(css, /\.no-webgl\s+\.host__fallback/);
 });
 
-test('bubble has a capped preview while card reading keeps the complete interpretation', () => {
+test('bubble shows longer responsive paragraphs without invading the cards panel', () => {
+  assert.match(block('.speech'), /width:62%;min-width:0;max-height:79%/);
+  assert.match(block('.speech__message'), /-webkit-line-clamp:9/);
+  const portrait = css.slice(css.indexOf('@media (max-aspect-ratio:3/5)'));
+  assert.ok(portrait.includes('.speech{width:64%;max-height:82%'));
+  const landscape = css.slice(css.indexOf('@media (min-aspect-ratio:1/1)'));
+  assert.ok(landscape.includes('.speech{grid-row:2;grid-column:1'));
+  assert.ok(landscape.includes('max-height:43%'));
+  assert.ok(landscape.includes('.reading{grid-row:2;grid-column:1'));
+  assert.ok(js.includes('maxChars = width < 390 ? 148 : width < 520 ? 164 : 185'));
+  assert.ok(js.includes('page.length >= minChars'));
+});
+
+test('bubble shows grouped paragraphs while card panel keeps a concise summary', () => {
   assert.match(js, /speechMessage\.textContent\s*=\s*line/);
   assert.match(js, /reading-summary'\)\.textContent\s*=\s*brief\(draw\.summary \|\| message, 145\)/);
   assert.match(js, /brief\(username,\s*23\)/);
