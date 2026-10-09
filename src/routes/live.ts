@@ -154,7 +154,9 @@ export function liveOverlayPage(): string {
 <meta name="mobile-web-app-capable" content="yes">
 <title>Jalur Tarot — LIVE 1 Reading</title>
 <link rel="stylesheet" href="/live1.css?v=20261009-1">
+<link rel="stylesheet" href="/overlay-fullscreen.css?v=20261009-1">
 <script src="/live1.js?v=20261009-1" defer></script>
+<script src="/overlay-fullscreen.js?v=20261009-1" defer></script>
 </head>
 <body>
 <main id="stage" aria-label="Pembacaan tarot Jalur Tarot LIVE 1" role="region">
@@ -193,6 +195,10 @@ export function liveOverlayPage(): string {
   </footer>
 </main>
 <div class="debug-state" id="debug-state" role="status" hidden></div>
+<div class="overlay-fullscreen-control" id="overlay-fullscreen-control">
+  <button class="overlay-fullscreen-button" id="overlay-fullscreen-button" type="button" aria-label="Masuk layar penuh" aria-pressed="false" title="Masuk layar penuh"><span class="overlay-fullscreen-icon" aria-hidden="true">⛶</span><span class="overlay-fullscreen-label">Layar Penuh</span></button>
+</div>
+<div class="overlay-fullscreen-status" id="overlay-fullscreen-status" role="status" aria-live="polite" hidden></div>
 </body>
 </html>`;
 }
