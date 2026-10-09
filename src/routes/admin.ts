@@ -769,7 +769,7 @@ admin.get('/live', async (c) => {
         </div>
         <p style="font-size:12px;color:var(--text-dim);line-height:1.5;margin:1rem 0;">
           Like dihitung dari total room TikTok (jika tersedia), atau penjumlahan event dari konektor.
-          Satu event yang melewati beberapa batas hanya memicu satu ramalan. Webhook harus menerima gift dan like.
+          Satu event yang melewati beberapa batas hanya memicu satu ramalan. Webhook sebaiknya menerima chat, gift, dan like.
           Untuk traffic tinggi, counter KV bersifat best-effort.
         </p>
         <button type="submit" class="btn btn-primary">Simpan Pengaturan LIVE</button>
@@ -795,7 +795,14 @@ admin.get('/live', async (c) => {
 
     <div class="card">
       <div class="card-title">Coba Manual (tanpa TikTok)</div>
-      <form method="POST" action="/admin/live/test-draw"><div class="form-row"><label>Susunan</label><select name="spreadId"><option value="single">1 Kartu</option><option value="three-card">3 Kartu</option></select><label>Username</label><input type="text" name="username" value="@tester"/><label>Nama Gift</label><input type="text" name="giftName" value="Mawar"/><button type="submit" class="btn btn-primary">[tarot] Tarik Kartu Sekarang</button></div></form>
+      <form method="POST" action="/admin/live/test-draw"><div class="form-row">
+         <label>Susunan</label><select name="spreadId"><option value="single">1 Kartu</option><option value="three-card">3 Kartu</option></select>
+         <label>Username</label><input type="text" name="username" value="@tester" maxlength="64"/>
+         <label>Nama Gift</label><input type="text" name="giftName" value="Mawar" maxlength="80"/>
+         <label>Topik Demo</label><select name="topic"><option value="cinta">Cinta</option><option value="nasib">Nasib</option><option value="karir">Karir</option></select>
+         <label>Komentar Demo</label><input type="text" name="question" value="Bagaimana cinta aku ke depan?" maxlength="160"/>
+         <button type="submit" class="btn btn-primary">[tarot] Tarik Kartu Sekarang</button>
+         </div></form>
     </div>
 
     <div class="card">
@@ -829,7 +836,11 @@ admin.post('/live/test-draw', async (c) => {
   const username = (body['username'] as string || '@tester').trim() || '@tester';
   const giftName = (body['giftName'] as string || '').trim() || undefined;
 
-  const draw = generateLiveDraw(spreadId, username, giftName, giftName ? 1 : undefined);
+  const rawTopic = String(body['topic'] || '');
+  const topic = rawTopic === 'cinta' || rawTopic === 'nasib' || rawTopic === 'karir' ? rawTopic : undefined;
+  const question = String(body['question'] || '').trim().replace(/[<>\\u0000-\\u001f]/g, ' ').slice(0, 160);
+  const draw = generateLiveDraw(spreadId, username, giftName, giftName ? 1 : undefined,
+    'gift', topic ? { topic, question } : undefined);
   const saved = await saveLiveDraw(c.env, draw);
   if (!saved) return c.redirect('/admin/live?msg=Gagal+menyimpan+draw+ke+KV&type=error');
 
