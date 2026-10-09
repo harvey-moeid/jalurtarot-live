@@ -60,3 +60,14 @@ test('bubble has a capped preview while card reading keeps the complete interpre
   assert.match(html, /id="host3d"/);
   assert.match(html, /id="reading-cards"/);
 });
+
+
+test('illustrated host remains contained in portrait, landscape and reduced motion', () => {
+  const html = live2OverlayPage();
+  assert.match(html, /id="host-portrait"/);
+  assert.match(html, /jalur-tarot-host\.webp/);
+  assert.match(css, /\.host__portrait\{/);
+  assert.match(css, /\.host\.is-illustrated canvas\{display:none\}/);
+  assert.match(css, /\.host\.is-reading \.host__portrait/);
+  assert.match(css, /prefers-reduced-motion:reduce\)\{\.host__portrait\{animation:none!important/);
+});

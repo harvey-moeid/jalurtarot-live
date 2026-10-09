@@ -16,9 +16,11 @@ test('LIVE 2 has a dedicated 9:16 overlay, assets and accessible labels', async 
   assert.match(entry, /app\.get\('\/live2'/);
   assert.match(entry, /app\.get\('\/live'/, 'LIVE 1 route must remain intact');
   assert.match(html, /id="host3d"/);
+  assert.match(html, /id="host-portrait"/);
+  assert.match(html, /\/models\/jalur-tarot-host\.webp/);
   assert.match(html, /id="host-model-debug"/);
-  assert.match(html, /src="\/live2\.js\?v=20261009-3"/);
-  assert.match(html, /href="\/live2\.css\?v=20261009-2"/);
+  assert.match(html, /src="\/live2\.js\?v=20261009-4"/);
+  assert.match(html, /href="\/live2\.css\?v=20261009-4"/);
   assert.match(html, /aria-live="polite"/);
   assert.match(css, /background:\s*transparent/, 'OBS must remain transparent by default');
   assert.match(css, /prefers-reduced-motion/);
@@ -29,6 +31,8 @@ test('browser script compiles and does not require external CDNs or public API s
   const src = await readFile(scriptUrl, 'utf8');
   assert.doesNotThrow(() => new vm.Script(src));
   assert.match(src, /\/api\/live\/state/);
+  assert.match(src, /query\.get\('character'\) === 'glb'/);
+  assert.match(src, /is-illustrated/);
   assert.match(src, /lastId = id/);
   assert.match(src, /WebGL/);
   assert.match(src, /textContent/);
