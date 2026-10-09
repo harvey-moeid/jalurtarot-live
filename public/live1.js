@@ -184,7 +184,6 @@
   async function poll() {
     if (polling || demo) return;
     if (document.hidden) { schedule(3000); return; }
-    if (queue && stage.classList.contains('show')) { schedule(1000); return; }
     polling = true;
     if (queue) {
       try {
@@ -194,7 +193,7 @@
           count.textContent = payload.pending > 0
             ? 'Menunggu ' + payload.pending + ' ramalan' : 'Siap menerima ramalan berikutnya';
         }
-        if (payload.item) {
+        if (payload.item && !stage.classList.contains('show')) {
           activeQueueItem=payload.item;
           if (Array.isArray(payload.item.draw?.cards) && payload.item.draw.cards.length) {
             render(payload.item.draw);
