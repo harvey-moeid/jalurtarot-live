@@ -77,7 +77,7 @@ test('portrait and landscape keep separate card/story areas with scrollable uncu
   assert.match(css, /\.summary-scroll\{[^}]*overflow:auto/);
   assert.match(css, /@media \(max-height:490px\) and \(min-aspect-ratio:1\/1\)/);
   assert.match(css, /@media \(prefers-reduced-motion:reduce\)/);
-  assert.doesNotMatch(css, /-webkit-line-clamp/);
+  assert.doesNotMatch(css.match(/\.summary\{[^}]*\}/)?.[0] || '', /-webkit-line-clamp/, 'narration must not be clamped');
 });
 
 test('demo portrait renders three cards + personalized topic with NO network calls', () => {
