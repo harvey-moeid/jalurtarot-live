@@ -131,7 +131,9 @@ function normalizedViewerName(event: ConnectorEvent): string {
 
 function eventMarkerKey(event: ConnectorEvent): string | null {
   const id = String(event.id || '').trim();
-  return id ? 'live:connector:event:' + id.slice(0, 160) : null;
+  const kind=String(event.event || 'unknown').toLowerCase().slice(0, 15);
+  const room=String(event.roomId || 'default').replace(/[^a-zA-Z0-9_-]/g,'').slice(0,55);
+  return id ? 'live:connector:event:' + kind + ':' + room + ':' + id.slice(0, 120) : null;
 }
 
 type ProcessedEventResult = { accepted: boolean; duplicate?: boolean; ignored?: string; drawId?: string };
@@ -168,7 +170,15 @@ async function processLike(
     eventKey: marker, room: room || 'unknown', delta,
     total: safeCount(data.totalLikeCount), milestone, draw,
   });
-  if (outcome.drawId && comment) await markLiveCommentRead(env, comment);
+  if (outcome.drawId) {
+    // Legacy /api/live/state remains compatible; queue is the source of truth.
+    try {
+      await env.RATE_LIMIT_KV.put('live:current', JSON.stringify(draw), { expirationTtl: 21_600 });
+    } catch (error) {
+      console.warn('Legacy like state mirror failed, durable queue persisted',error);
+    }
+    if (comment) await markLiveCommentRead(env, comment);
+  }
   return outcome;
 }
 
