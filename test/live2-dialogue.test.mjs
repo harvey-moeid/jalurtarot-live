@@ -5,7 +5,7 @@ import { readFile } from 'node:fs/promises';
 
 const script = await readFile(new URL('../public/live2.js', import.meta.url), 'utf8');
 
-function createHarness(withVoice = false) {
+function createHarness(withVoice = false, viewportWidth = 1080) {
   const nodes = new Map();
   let clock = 10_000;
   let nextId = 0;
@@ -65,7 +65,7 @@ function createHarness(withVoice = false) {
     createElement(tag) { return element(tag); },
     addEventListener() {},
   };
-  const window = { addEventListener() {} };
+  const window = { innerWidth: viewportWidth, addEventListener() {} };
   if (withVoice) window.speechSynthesis = speechSynthesis;
   vm.runInNewContext(script, {
     document, window,
@@ -82,14 +82,17 @@ test('LIVE 2 advances readable dialogue without truncating the whole ramalan', (
   const h = createHarness();
   const bubble = h.nodes.get('speech-message');
   assert.match(bubble.textContent, /aku baca pertanyaanmu tentang cinta/);
-  assert.ok(bubble.textContent.length <= 88);
+  assert.ok(bubble.textContent.length > 88 && bubble.textContent.length <= 185,
+    'combine several thoughts into one visible paragraph');
   assert.equal(h.nodes.get('speech-progress').textContent.split(' / ')[0], '1');
+  assert.ok(Number(h.nodes.get('speech-progress').textContent.split(' / ')[1]) <= 4,
+    'demo should fit into no more than four speech bubbles on desktop');
   assert.equal(h.nodes.get('reading').hidden, false);
   assert.equal(h.nodes.get('reading-cards').children.length, 3);
   const first = bubble.textContent;
   h.advance(15_000);
   assert.notEqual(bubble.textContent, first, 'bubble advances to a new thought');
-  assert.ok(bubble.textContent.length <= 88);
+  assert.ok(bubble.textContent.length <= 185);
   assert.match(h.nodes.get('reading-summary').textContent, /Halo @penonton/);
   assert.equal(h.nodes.get('reading').hidden, false);
   h.advance(140_000);
@@ -110,9 +113,18 @@ test('voice-enabled dialogue progresses only when utterance ends', () => {
   assert.equal(h.spoken[1].text, h.nodes.get('speech-message').textContent);
 });
 
+
+test('compact portrait uses more text than before without overflowing the word budget', () => {
+  const h = createHarness(false, 320);
+  const text = h.nodes.get('speech-message').textContent;
+  assert.ok(text.length >= 100 && text.length <= 148,
+    'mobile bubble should contain a readable multi-sentence paragraph');
+  assert.ok(Number(h.nodes.get('speech-progress').textContent.split(' / ')[1]) <= 4);
+});
+
 test('TTS fallback advances if OBS or the browser never fires onend', () => {
   const h = createHarness(true);
   const first = h.nodes.get('speech-message').textContent;
-  h.advance(20_000);
+  h.advance(32_000);
   assert.notEqual(h.nodes.get('speech-message').textContent, first);
 });
