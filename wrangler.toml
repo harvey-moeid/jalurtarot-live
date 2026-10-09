@@ -10,6 +10,14 @@ directory = "./public"
 binding = "ASSETS"
 not_found_handling = "none"
 
+[[durable_objects.bindings]]
+name = "LIVE_QUEUE"
+class_name = "LiveReadingQueue"
+
+[[migrations]]
+tag = "live_queue_sqlite_v1"
+new_sqlite_classes = ["LiveReadingQueue"]
+
 [[kv_namespaces]]
 binding = "RATE_LIMIT_KV"
 id = "2545355c3b6e4012a1bddf0c66c181a0"
