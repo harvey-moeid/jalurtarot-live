@@ -87,7 +87,7 @@ test('both overlays include one identical fullscreen controller and local assets
     assert.match(page, /aria-label="Masuk layar penuh"/);
     assert.match(page, /role="status" aria-live="polite"/);
   }
-  assert.match(live1, /href="\/live1\.css\?v=20261009-1"/);
+  assert.match(live1, /href="\/live1\.css\?v=20261010-1"/);
   assert.match(live2, /href="\/live2\.css\?v=20261010-1"/);
 });
 

@@ -153,12 +153,40 @@ export function liveOverlayPage(): string {
 <meta name="color-scheme" content="dark">
 <meta name="mobile-web-app-capable" content="yes">
 <title>Jalur Tarot — LIVE 1 Reading</title>
-<link rel="stylesheet" href="/live1.css?v=20261009-1">
+<link rel="stylesheet" href="/live1.css?v=20261010-1">
 <link rel="stylesheet" href="/overlay-fullscreen.css?v=20261009-1">
-<script src="/live1.js?v=20261009-1" defer></script>
+<script src="/live1.js?v=20261010-1" defer></script>
 <script src="/overlay-fullscreen.js?v=20261009-1" defer></script>
 </head>
 <body>
+<section class="idle-screen" id="idle-screen" aria-label="Jalur Tarot sedang menunggu ramalan">
+  <div class="idle__stars" aria-hidden="true"></div>
+  <header class="idle__header">
+    <span class="idle__brand-mark" aria-hidden="true">☾</span>
+    <div class="idle__brand-copy"><strong>JALUR TAROT</strong><small>LIVE TAROT READING</small></div>
+    <span class="idle__live"><i aria-hidden="true"></i> LIVE</span>
+  </header>
+  <div class="idle__content">
+    <div class="idle__copy">
+      <div class="idle__sigil" aria-hidden="true"><span>☾</span></div>
+      <p class="idle__eyebrow">✧ KARTU · ENERGI · PESAN ✧</p>
+      <h1 class="idle__title">Menunggu <em>Pesan Semesta</em></h1>
+      <p class="idle__description">Setiap pertanyaan punya cerita.<br>Semesta punya pesan untukmu.</p>
+      <p class="idle__status" role="status"><span class="idle__pulse" aria-hidden="true"></span>Siap menerima ramalan berikutnya</p>
+    </div>
+    <div class="idle__deck" aria-hidden="true">
+      <div class="idle__orbit"></div>
+      <div class="idle__card idle__card--left"><div class="idle__card-face"><span class="idle__card-corner">✧</span><span class="idle__card-symbol">✦</span><span class="idle__card-corner">✧</span></div></div>
+      <div class="idle__card idle__card--right"><div class="idle__card-face"><span class="idle__card-corner">✧</span><span class="idle__card-symbol">✦</span><span class="idle__card-corner">✧</span></div></div>
+      <div class="idle__card idle__card--center"><div class="idle__card-face"><span class="idle__card-corner">☾</span><span class="idle__card-symbol">☼</span><span class="idle__card-corner">☾</span></div></div>
+    </div>
+  </div>
+  <footer class="idle__footer">
+    <div class="idle__instructions"><strong>✦ TULIS CINTA · NASIB · KARIER</strong><span>di komentar LIVE untuk menyiapkan pertanyaanmu</span></div>
+    <div class="idle__trigger">🎁 Gift atau target like <strong>membuka ramalan</strong></div>
+    <p>✧ SETIAP KARTU ADALAH PESAN · SETIAP KAMU PUNYA CERITA ✧</p>
+  </footer>
+</section>
 <main id="stage" aria-label="Pembacaan tarot Jalur Tarot LIVE 1" role="region">
   <header class="stage-head">
     <div class="head-meta">
