@@ -212,7 +212,7 @@ mungkin membutuhkan waktu singkat untuk propagasi antar lokasi Cloudflare.
 4. Saat **ambang like ROOM** tercapai, satu bacaan dibuka: pilih komentar relevan pengirim like bila ada, atau komentar relevan terbaru di room. Like yang belum melewati ambang **tidak** memicu bacaan.
 5. Setelah bacaan berhasil disimpan, komentar terkait ditandai telah dibacakan (best-effort). Aspek interpretasi setiap kartu disesuaikan (`hubungan` untuk cinta, `karir` untuk karier, `nasib` untuk nasib). Seluruh kartu pada spread tiga kartu mengacu ke aspek yang sama.
 6. Narasi memakai sambutan yang natural, mengacu pada pertanyaan penonton, menginterpretasikan kartu, dan memberi penutup reflektif; tanpa klaim kepastian mutlak. LIVE 1 menampilkan ringkasan humanis; LIVE 2 menggunakan `narration` pada teks dan **opsional voice** via `/live2?voice=1` (bergantung dukungan browser OBS).
-7. LIVE 2 menyajikan narasi **kalimat demi kalimat** di gelembung kiri karakter (potongan maksimal sekitar 88 karakter, ditampilkan berurutan dengan animasi). Tanpa audio, kalimat berganti otomatis sekitar 2,4–8,2 detik mengikuti panjang dialog. Dengan `?voice=1`, kalimat berikutnya menunggu TTS browser selesai apabila tersedia (fallback timer mencegah macet saat OBS tidak mengirim event). Panel bawah tetap menampilkan kartu dan ringkasan. Bacaan ditutup 6 detik setelah dialog selesai dengan batas waktu pengaman 105 detik. Event gift/like baru membatalkan dialog lama. **Animasi karakter hanya mendekati gerakan bicara, bukan lip-sync fonem akurat.**
+7. LIVE 2 menggabungkan **beberapa kalimat per gelembung** agar narasi lebih nyaman dibaca dengan jumlah halaman lebih sedikit. Tiap bubble dibatasi **maksimal 185 karakter** (tablet/desktop), **164 karakter** (ponsel sedang), atau **148 karakter** (ponsel sempit), terputus pada batas kata dan bila memungkinkan batas kalimat. Area speech bubble diperbesar dengan aturan portrait/landscape tersendiri. Tanpa audio, paragraf berganti otomatis sekitar **4,5–11,5 detik** mengikuti panjang teks. Dengan `?voice=1`, pergantian menunggu TTS browser selesai bila tersedia (fallback timer maksimal 25 detik agar tidak macet saat OBS tidak mengirim callback). Panel bawah tetap menampilkan kartu dan ringkasan. Bacaan ditutup 6 detik setelah narasi selesai dengan batas pengaman **130 detik**. Saat ini event gift/like baru masih dapat **memotong bacaan sebelumnya** karena kedua overlay hanya menerima satu `live:current` dari KV; fitur antrean event **belum diimplementasikan**. **Animasi karakter bukan lip-sync fonem akurat.**
 
 **WAJIB di dashboard `tiktok-live-konektor`:** edit webhook ke `https://livejalur.muidsoft.com/api/live/connector-webhook?secret=...` untuk menerima ketiga tipe **`chat`, `gift`, dan `like`**. Hanya mengaktifkan gift/like tidak cukup untuk personalisasi komentar melalui webhook. REST polling `chat,gift,like` menjadi fallback jika overlay sedang aktif, bukan jaminan delivery. API key/secret tetap disimpan server-side.
 
@@ -236,7 +236,7 @@ Tata letak otomatis mengikuti rasio Browser Source/viewport, tanpa parameter tam
 - **Landscape 16:9** (misalnya OBS **1920 × 1080**): judul di atas; speech bubble + panel hasil di sisi kiri; karakter ilustrasi di sisi kanan; status dan CTA tetap berada di baris footer terpisah.
 - **Layar HP pendek / window kecil**: teks dan jarak dipadatkan, ornamen sekunder disembunyikan, batas panel tetap jelas.
 - **Mode transparan** untuk OBS tetap default; tambah `?background=1` jika ingin latar penuh, dan `?demo=1` untuk simulasi 3 kartu tanpa TikTok.
-- Setelah deploy, **refresh Browser Source** di OBS agar `live2.css?v=20261009-5` tidak memakai versi cache sebelumnya. LIVE 1 dan webhook tidak berubah.
+- Setelah deploy, **refresh Browser Source** di OBS agar `live2.css?v=20261010-2` dan `live2.js?v=20261010-2` termuat. LIVE 1, webhook, dan aturan gift/like tidak berubah.
 
 ### LIVE 2 — overlay portrait 3D bergerak
 
@@ -253,7 +253,7 @@ LIVE 2 menggunakan endpoint **GET /api/live/state** dan konfigurasi gift/like ya
 
 ### LIVE 2 — layout portrait yang diperbarui
 
-Tampilan /live2 disusun dalam **empat zona terpisah**: judul di atas, karakter Luna + bubble di tengah atas, hasil 1–3 kartu di tengah bawah, dan ticker + ajakan gift di paling bawah. Bubble menampilkan cuplikan singkat agar tidak menutupi wajah; interpretasi lebih panjang tetap ditampilkan pada panel kartu. Nama penonton panjang dan judul kartu terpotong secara visual agar tidak mendorong elemen keluar layar.
+Tampilan /live2 disusun dalam **empat zona terpisah**: judul di atas, karakter Jalur Tarot + bubble di tengah atas, hasil 1–3 kartu di tengah bawah, dan status + ajakan gift di paling bawah. Bubble menampilkan **paragraf 2–3 kalimat per halaman** dalam batas responsif dan panel kartu menyajikan ringkasan. Nama penonton panjang serta judul kartu tetap dipotong secara visual agar tidak menggeser elemen ke luar layar.
 
 - Target utama OBS **1080 × 1920**, dengan penyesuaian untuk browser portrait HP, viewport pendek, dan preview landscape.
 - Kartu tidak lagi berbagi area dengan notifikasi viewer; panel hasil memakai grid yang menyediakan tinggi tersendiri untuk interpretasi.
