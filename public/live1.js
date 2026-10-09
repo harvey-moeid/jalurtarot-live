@@ -9,6 +9,10 @@
   const reducedMotion = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
   const $ = id => document.getElementById(id);
   const stage = $('stage');
+  // Fallback legacy polling only if queue asset failed to load.
+  const queue = typeof window !== 'undefined' && window.LiveReadingQueue
+    ? window.LiveReadingQueue.connect('live1') : null;
+  let activeQueueItem = null;
   const idle = $('idle-screen');
   // Default shows a dedicated waiting screen. ?idle=off restores a transparent OBS overlay.
   const idleEnabled = params.get('idle') !== 'off';
@@ -101,6 +105,11 @@
     stage.classList.remove('show');
     stopScroll();
     if (idle && idleEnabled) idle.hidden = false;
+    if (activeQueueItem && queue) {
+      queue.finish(activeQueueItem);
+      activeQueueItem = null;
+      schedule(0);
+    }
   }
   function startScroll() {
     stopScroll();
@@ -175,7 +184,34 @@
   async function poll() {
     if (polling || demo) return;
     if (document.hidden) { schedule(3000); return; }
+    if (queue && stage.classList.contains('show')) { schedule(1000); return; }
     polling = true;
+    if (queue) {
+      try {
+        const payload=await queue.next();
+        const count=$('idle-queue-count');
+        if (count && !stage.classList.contains('show')) {
+          count.textContent = payload.pending > 0
+            ? 'Menunggu ' + payload.pending + ' ramalan' : 'Siap menerima ramalan berikutnya';
+        }
+        if (payload.item) {
+          activeQueueItem=payload.item;
+          if (Array.isArray(payload.item.draw?.cards) && payload.item.draw.cards.length) {
+            render(payload.item.draw);
+          } else {
+            queue.finish(payload.item); // Malformed old record cannot block the queue.
+            activeQueueItem=null;
+          }
+        }
+        setDebug('Antrean terhubung · ' + (payload.pending || 0) + ' menunggu');
+      } catch (error) {
+        setDebug('Antrean bermasalah · mencoba ulang');
+      } finally {
+        polling=false;
+        schedule(POLL_MS);
+      }
+      return;
+    }
     const ctrl = new AbortController();
     const timeout = setTimeout(function () { ctrl.abort(); }, 8000);
     try {
