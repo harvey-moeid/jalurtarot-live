@@ -9,6 +9,10 @@
   const reducedMotion = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
   const $ = id => document.getElementById(id);
   const stage = $('stage');
+  const idle = $('idle-screen');
+  // Default shows a dedicated waiting screen. ?idle=off restores a transparent OBS overlay.
+  const idleEnabled = params.get('idle') !== 'off';
+  if (idle && !idleEnabled) idle.hidden = true;
   const viewer = $('viewer');
   const gift = $('gift');
   const topic = $('topic');
@@ -93,6 +97,11 @@
     if (scrollTimer !== null) clearTimeout(scrollTimer);
     scrollTimer = null;
   }
+  function returnToIdle() {
+    stage.classList.remove('show');
+    stopScroll();
+    if (idle && idleEnabled) idle.hidden = false;
+  }
   function startScroll() {
     stopScroll();
     if (reducedMotion) return; // manual scrolling remains possible
@@ -145,6 +154,9 @@
     summary.textContent = cleanNarration(draw.narration || draw.summary || 'Pesan kartu sedang disiapkan.');
     summaryScroll.scrollTop = 0;
     pausedUntil = 0;
+    // Hide the idle scene only after all reading data is ready.
+    // Repeated triggers simply refresh the reading without flashing the idle scene.
+    if (idle) idle.hidden = true;
     stage.classList.remove('show');
     // Replay reveal animation for a fresh draw.
     void stage.offsetWidth;
@@ -152,10 +164,7 @@
     startScroll();
     if (hideTimer !== null) clearTimeout(hideTimer);
     if (!demo) {
-      hideTimer = setTimeout(function () {
-        stage.classList.remove('show');
-        stopScroll();
-      }, HIDE_AFTER_MS);
+      hideTimer = setTimeout(returnToIdle, HIDE_AFTER_MS);
     }
     setDebug('Menampilkan hasil ' + trimText(draw.id || 'baru', 90));
   }
