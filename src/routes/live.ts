@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import type { Env as ApiEnv } from './api';
 import { isAuthenticated } from '../middleware/adminAuth';
 import { generateLiveDraw, getLiveDraw, saveLiveDraw, type LiveSpreadId } from '../lib/live';
+import { nextQueuedReading, type LiveQueueCursor } from '../lib/liveQueue';
 import {
   connectorConfigured,
   getConnectorEvents,
@@ -126,6 +127,34 @@ live.get('/connector/events', async (c) => {
   c.header('Cache-Control', 'no-store');
   try { return c.json(await getConnectorEvents(c.env, types, limit)); }
   catch (error: any) { return c.json({ ok: false, error: String(error?.message || error) }, 502); }
+});
+
+// GET /api/live/queue — read-only, stateless per browser cursor.
+ // No public ACK endpoint: a viewer cannot acknowledge another OBS source's events.
+live.get('/queue', async (c) => {
+  const bootstrap = c.req.query('bootstrap') === '1';
+  const parseCursor = (key: string): number | null => {
+    const raw=c.req.query(key);
+    if (raw === undefined) return bootstrap ? 0 : null;
+    if (!/^(0|[1-9][0-9]{0,14})$/.test(raw)) return null;
+    const n=Number(raw);
+    return Number.isSafeInteger(n) ? n : null;
+  };
+  const gift=parseCursor('gift');
+  const like=parseCursor('like');
+  const streak=parseCursor('streak');
+  if (gift===null || like===null || streak===null || streak>3) {
+    return c.json({ error:'Cursor antrean tidak valid' },400);
+  }
+  try {
+    const cursor:LiveQueueCursor={gift,like,giftsStreak:streak};
+    const result=await nextQueuedReading(c.env,cursor,bootstrap);
+    c.header('Cache-Control','no-store');
+    return c.json(result);
+  } catch (error) {
+    console.error('Cannot read LIVE queue',error);
+    return c.json({ error:'Antrean LIVE belum tersedia' },503);
+  }
 });
 
 // GET /api/live/state
