@@ -124,7 +124,13 @@
     const isLike = draw.triggerType === 'like';
     const giftName = safeText(draw.giftName, 80);
     // A shorter bubble protects the character; the reading panel keeps the full message.
-    speechTitle.textContent = 'Ramalan untuk ' + brief(username, 23);
+    const topics = { cinta: 'Cinta', karir: 'Karier', nasib: 'Nasib' };
+    const titleTopic = topics[draw.topic];
+    speechTitle.textContent = titleTopic
+      ? 'Bacaan ' + titleTopic + ' untuk ' + brief(username, 23)
+      : 'Ramalan untuk ' + brief(username, 23);
+    const readingLabel = document.querySelector?.('.reading__label');
+    if (readingLabel) readingLabel.textContent = titleTopic ? 'PESAN ' + titleTopic.toUpperCase() : 'PESAN KARTU';
     speechMessage.textContent = brief(message, 115);
     speakingUntil = Date.now() + Math.min(16_000, Math.max(3800, message.length * 80));
     speech.classList.add('talking');
