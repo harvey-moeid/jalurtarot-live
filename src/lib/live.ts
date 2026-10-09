@@ -28,6 +28,7 @@
  */
 
 import { drawCardsForSpread } from './draw';
+import { enqueueGift, type LiveQueueEnv } from './liveQueue';
 import type { LiveTopic } from './liveComment';
 import { getSpreadById } from './spreads';
 import { liveAspectMeanings } from './liveAspectMeanings';
@@ -151,13 +152,26 @@ export function generateLiveDraw(
   };
 }
 
-export async function saveLiveDraw(env: { RATE_LIMIT_KV: KVNamespace }, draw: LiveDraw): Promise<boolean> {
+export async function saveLiveDraw(
+  env: { RATE_LIMIT_KV: KVNamespace } & LiveQueueEnv,
+  draw: LiveDraw,
+  eventKey?: string,
+): Promise<boolean> {
+  // Always enqueue first: KV keeps only a legacy preview of the most recent draw.
+  // A KV failure after durable commit must not lose/duplicate a reading.
   try {
-    await env.RATE_LIMIT_KV.put(STATE_KEY, JSON.stringify(draw), {
-      expirationTtl: STATE_TTL_SECONDS,
-    });
+    const queued = await enqueueGift(env, draw, eventKey);
+    if (!queued.accepted) return false;
+    try {
+      await env.RATE_LIMIT_KV.put(STATE_KEY, JSON.stringify(draw), {
+        expirationTtl: STATE_TTL_SECONDS,
+      });
+    } catch (error) {
+      console.warn('Legacy live:current mirror failed; Durable Object queue is safe', error);
+    }
     return true;
-  } catch {
+  } catch (error) {
+    console.error('Cannot persist live reading in durable queue',error);
     return false;
   }
 }
