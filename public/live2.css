@@ -171,6 +171,7 @@ body{touch-action:manipulation}
   font-size:clamp(11px,2vmin,21px);overflow:hidden}
 .footer__viewer span:first-child{font-size:1.1em;color:var(--gold);flex:none}
 .footer__viewer span:last-child{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#viewer-label{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .queue-indicator{flex:none;max-width:39%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
   font-size:clamp(9px,1.5vmin,17px);color:var(--gold);font-weight:800}
 .footer__cta{width:min(83%,700px);min-width:0;margin:0;
