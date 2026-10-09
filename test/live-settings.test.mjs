@@ -90,7 +90,7 @@ test('integration checks: authenticated admin, webhook and like fallback', async
   assert.match(connector, /redirect:\s*'manual'/);
   assert.doesNotMatch(connector, /redirect:\s*'error'/);
   assert.match(connector, /response\.status >= 300 && response\.status < 400/);
-  assert.match(live, /getConnectorEvents\(env, 'gift,like'/);
+  assert.match(live, /getConnectorEvents\(env, 'chat,gift,like'/);
   assert.match(live, /Legacy TikTok listener dinonaktifkan/);
   assert.match(live, /connector-webhook/);
   assert.match(live, /isAuthenticated\(c\)/);
