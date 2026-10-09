@@ -18,6 +18,7 @@
   const summaryScroll = $('summary-scroll');
   const storyTitle = $('story-title');
   const debugEl = $('debug-state');
+  if (params.get('background') === '1') stage.classList.add('with-background');
   const HIDE_AFTER_MS = 45_000;
   const POLL_MS = 1000;
   const MAX_AGE_MS = 120_000;
