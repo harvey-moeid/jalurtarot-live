@@ -237,6 +237,7 @@ Keamanan: tidak perlu API key di browser, tidak ada parameter trigger publik bar
 - Pengujian termasuk validasi struktur GLB. Demo `/live2?demo=1&background=1` tidak mengirim event TikTok dan tidak mengubah KV.
 - Jika font, WebGL, atau gambar tarot bermasalah, sistem menampilkan fallback; gift dan webhook di Worker tidak diubah oleh pembaruan tampilan.
 - Setelah PR di-merge ke `master` dan CI deploy berhasil, refresh source Browser OBS untuk mengambil aset baru.
+- Loader pemulihan: jika GLTFLoader utama gagal mengurai model GLB baru, browser mencoba ulang memakai decoder mesh glTF 2.0 sederhana yang membaca geometry dan tekstur warna langsung. Model lama hanya dipakai jika kedua cara gagal. Decoder sederhana mendukung mesh standar non-Draco, atribut posisi/normal/UV serta tekstur baseColor tersemat (tidak menangani semua varian glTF). Error asli dan error pemulihan tetap terbaca di `?debug=1`.
 - Jika setelah unggah `public/models/jalur-tarot-custom.glb` karakter LIVE 2 masih lama, buka `/live2?demo=1&background=1&debug=1`. Label 3D `CUSTOM` menunjukkan GLB berhasil, `LOADING` saat mengunduh, `FALLBACK` saat gagal sehingga memakai karakter bawaan, dan `UNAVAILABLE` ketika WebGL/library tidak tersedia. Lihat peringatan console untuk penyebab teknis. Label ini **hanya** tampil dengan `debug=1`.
 - Asset LIVE 2 menggunakan cache-busting (`?v=...`) di JS/CSS/model GLB dan route `/live2` mengirim `Cache-Control: no-store` agar upload model tidak tertahan 404 atau script lama pada browser/OBS.
 
