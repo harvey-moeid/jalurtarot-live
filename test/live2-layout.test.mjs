@@ -66,12 +66,13 @@ test('stage supports transparent OBS, 9:16, short phone, desktop and reduce-moti
 });
 
 test('bubble has a capped preview while card reading keeps the complete interpretation', () => {
-  assert.match(js, /speechMessage\.textContent\s*=\s*brief\(message,\s*115\)/);
-  assert.match(js, /reading-summary'\)\.textContent\s*=\s*message/);
+  assert.match(js, /speechMessage\.textContent\s*=\s*line/);
+  assert.match(js, /reading-summary'\)\.textContent\s*=\s*brief\(draw\.summary \|\| message, 145\)/);
   assert.match(js, /brief\(username,\s*23\)/);
   const html = live2OverlayPage();
   assert.match(html, /id="reading-summary"/);
   assert.match(html, /id="speech-message"/);
+  assert.match(html, /id="speech-progress"/);
   assert.match(html, /id="host3d"/);
   assert.match(html, /id="reading-cards"/);
 });

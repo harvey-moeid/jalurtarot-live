@@ -103,6 +103,11 @@ body{touch-action:manipulation}
 .speech__message{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:4;
   overflow:hidden;margin:0;font-size:clamp(12px,2.1vmin,23px);line-height:1.34;overflow-wrap:anywhere}
 .speech.talking{animation-duration:1.6s}
+.speech__message.is-appearing{animation:live2-line-in .38s ease-out both}
+.speech__progress{display:block;margin-top:clamp(3px,.5vh,9px);
+  color:#77518b;text-align:right;font-size:clamp(9px,1.35vmin,15px);
+  font-weight:700;letter-spacing:.12em}
+@keyframes live2-line-in{from{opacity:.25;transform:translateY(5px)}to{opacity:1;transform:translateY(0)}}
 
 /* Result is contained in its own row and can shrink to short OBS sources. */
 .reading{grid-column:1;grid-row:3;position:relative;z-index:4;
