@@ -168,13 +168,13 @@ wrangler secret put TIKTOK_CONNECTOR_WEBHOOK_SECRET
 
 `TIKTOK_CONNECTOR_API_KEY` harus sama dengan `API_KEY` pada service `tiktok-live-konektor`.
 
-Di dashboard `tiktok-live-konektor`, daftarkan webhook event **`gift` dan `like`** ke:
+Di dashboard `tiktok-live-konektor`, daftarkan webhook event **`chat`, `gift`, dan `like`** ke:
 
 ```text
 https://DOMAIN-JALURTAROT/api/live/connector-webhook?secret=WEBHOOK_SECRET
 ```
 
-Webhook adalah jalur realtime utama. Overlay memiliki fallback polling event gift dan like dari REST API service **yang sama**, `tiktok-live-konektor` (best-effort, tidak menjamin semua event). `tiktok-listener/` hanya arsip historis, jangan deploy atau hidupkan listener kedua.
+Webhook adalah jalur realtime utama. Overlay memiliki fallback polling event chat, gift, dan like dari REST API service **yang sama**, `tiktok-live-konektor` (best-effort, tidak menjamin semua event). `tiktok-listener/` hanya arsip historis, jangan deploy atau hidupkan listener kedua.
 
 ### Pengaturan gift dan like tanpa redeploy
 
@@ -192,13 +192,32 @@ mungkin membutuhkan waktu singkat untuk propagasi antar lokasi Cloudflare.
   secara best-effort; lonjakan melewati beberapa milestone memicu maksimal satu draw
   per event. KV **tidak menyediakan increment atomik**; untuk live sangat ramai,
   gunakan Durable Objects agar tidak terjadi race penghitungan.
-- Pada konektor Render, webhook harus dikonfigurasi untuk kedua event `gift` dan `like`.
+- Pada konektor Render, webhook harus dikonfigurasi untuk event `chat`, `gift`, dan `like`.
   REST polling tersedia sebagai fallback, bukan pengganti webhook yang andal.
 - API feed `/api/live/connector/{status,stats,events}` hanya dapat diakses
   dengan sesi login admin; jangan mengirim `TIKTOK_CONNECTOR_API_KEY` ke browser.
 - Untuk kompatibilitas, `/admin` mengarah ke `/admin/live`. Halaman blacklist
   dihapus karena tidak pernah dipakai untuk menolak request publik maupun ramalan statis;
   Banner dipertahankan karena `/api/banner` dibaca oleh homepage.
+
+
+### Pembacaan komentar LIVE (9 Oktober 2026)
+
+**Tujuan:** pembaca tarot lebih natural, menjawab topik **cinta / nasib / karier** dari komentar TikTok. Implementasi lokal dan deterministik berdasarkan makna kartu, **bukan panggilan LLM/AI berbayar**.
+
+**Alur:**
+1. Penonton menulis komentar seperti `Cinta: apakah hubungan ini bisa membaik?`, `Karir: ada peluang promosi?`, atau `Nasib: bagaimana keberuntungan saya?`.
+2. Worker menangkap event `chat` dan menyimpan **topik + komentar** di Cloudflare KV selama maksimal **15 menit**, dipisahkan berdasarkan room dan akun penonton. Komentar **tidak pernah memicu kartu sendiri**.
+3. Saat **gift yang valid** diterima (menurut nilai/nama gift di admin), sistem mengambil **komentar terbaru pengirim gift yang belum dibacakan**. Jika tidak ada, sistem tetap menggunakan ramalan umum.
+4. Saat **ambang like ROOM** tercapai, satu bacaan dibuka: pilih komentar relevan pengirim like bila ada, atau komentar relevan terbaru di room. Like yang belum melewati ambang **tidak** memicu bacaan.
+5. Setelah bacaan berhasil disimpan, komentar terkait ditandai telah dibacakan (best-effort). Aspek interpretasi setiap kartu disesuaikan (`hubungan` untuk cinta, `karir` untuk karier, `nasib` untuk nasib). Seluruh kartu pada spread tiga kartu mengacu ke aspek yang sama.
+6. Narasi memakai sambutan yang natural, mengacu pada pertanyaan penonton, menginterpretasikan kartu, dan memberi penutup reflektif; tanpa klaim kepastian mutlak. LIVE 1 menampilkan ringkasan humanis; LIVE 2 menggunakan `narration` pada teks dan **opsional voice** via `/live2?voice=1` (bergantung dukungan browser OBS).
+
+**WAJIB di dashboard `tiktok-live-konektor`:** edit webhook ke `https://livejalur.muidsoft.com/api/live/connector-webhook?secret=...` untuk menerima ketiga tipe **`chat`, `gift`, dan `like`**. Hanya mengaktifkan gift/like tidak cukup untuk personalisasi komentar melalui webhook. REST polling `chat,gift,like` menjadi fallback jika overlay sedang aktif, bukan jaminan delivery. API key/secret tetap disimpan server-side.
+
+**Tes admin:** `/admin/live` → **Coba Manual** → isi Topik Demo dan Komentar Demo → tarik kartu, lalu lihat hasil di LIVE 1 atau LIVE 2. Demo browser `?demo=1` tidak memakai webhook atau memodifikasi KV.
+
+**Catatan produksi:** KV bukan antrean transaksi atomik. Komentar/event yang sangat berdekatan dapat terlambat terbaca atau tertimpa, dan `live:current` hanya menyimpan satu bacaan terbaru. Untuk beban ramai yang memerlukan urutan dan jaminan satu bacaan per penonton, tingkatkan ke Durable Objects/Queue. Tidak ada klaim voice lip-sync 3D asli karena host standar berupa ilustrasi animasi.
 
 
 ### Karakter utama LIVE 2 (9 Oktober 2026)
