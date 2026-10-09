@@ -45,8 +45,13 @@
   let polling = false;
   let pollTimer = 0;
   let closeTimer = 0;
-  let voiceTimer = 0;
-  const HIDE_AFTER_MS = 45_000;
+  let speechTimer = 0;
+  let speechToken = 0;
+  let speechLines = [];
+  let speechIndex = 0;
+  // Leave time for each thought instead of truncating every reading at 45s.
+  const MAX_READING_MS = 105_000;
+  const END_HOLD_MS = 6_000;
   const POLL_INTERVAL_MS = 1200;
   const MAX_CLIENT_AGE_MS = 120_000;
 
@@ -74,8 +79,29 @@
     return Date.now() < speakingUntil;
   }
 
-  function say(text) {
-    if (!voiceEnabled || !('speechSynthesis' in window)) return;
+  // Split thoughts at sentence/word boundaries to keep the bubble legible.
+  function splitSpeech(message) {
+    const words = safeText(message, 650).replace(/\s+/g, ' ').trim().split(/\s+/).filter(Boolean);
+    const lines = [];
+    let line = '';
+    for (const word of words) {
+      if (line && line.length + word.length + 1 > 88) {
+        lines.push(line);
+        line = '';
+      }
+      line += (line ? ' ' : '') + word;
+      if (/[.!?…]["'”’)]?$/.test(word) && line.length >= 32) {
+        lines.push(line);
+        line = '';
+      }
+    }
+    if (line) lines.push(line);
+    return lines.length ? lines : ['Mari kita lihat pesan kartumu hari ini.'];
+  }
+
+  function say(text, onDone) {
+    if (!voiceEnabled || !('speechSynthesis' in window) ||
+        typeof SpeechSynthesisUtterance !== 'function') return false;
     try {
       speechSynthesis.cancel();
       const utterance = new SpeechSynthesisUtterance(text);
@@ -85,27 +111,80 @@
       const voices = speechSynthesis.getVoices();
       const bahasa = voices.find(v => /^id[-_]/i.test(v.lang));
       if (bahasa) utterance.voice = bahasa;
-      utterance.onend = () => { speakingUntil = 0; speech.classList.remove('talking'); };
-      utterance.onerror = () => { speakingUntil = 0; speech.classList.remove('talking'); };
+      // Browser audio controls the next line if onend events are available.
+      utterance.onend = onDone;
+      utterance.onerror = onDone;
       speechSynthesis.speak(utterance);
+      return true;
     } catch (_) {
-      // OBS and mobile browser voice availability varies; text remains usable.
+      // OBS may block TTS. Timed text transitions still function.
+      return false;
     }
   }
 
-  function stopReading() {
+  function cancelNarration() {
+    ++speechToken; // Invalidates old timers and stale utterance callbacks.
+    clearTimeout(speechTimer);
     clearTimeout(closeTimer);
+    speechLines = [];
+    speechIndex = 0;
+    speakingUntil = 0;
+    speech.classList.remove('talking');
+    try { if ('speechSynthesis' in window) speechSynthesis.cancel(); } catch (_) {}
+  }
+
+  function showNextLine(token) {
+    if (token !== speechToken || activeId === null) return;
+    if (speechIndex >= speechLines.length) {
+      speakingUntil = 0;
+      speech.classList.remove('talking');
+      closeTimer = setTimeout(function () {
+        if (token === speechToken) stopReading();
+      }, END_HOLD_MS);
+      return;
+    }
+
+    const line = speechLines[speechIndex++];
+    speechMessage.textContent = line;
+    const progress = document.getElementById('speech-progress');
+    if (progress) {
+      progress.hidden = false;
+      progress.textContent = speechIndex + ' / ' + speechLines.length;
+    }
+    speechMessage.classList.remove('is-appearing');
+    void speechMessage.offsetWidth; // Restart the entrance animation for each line.
+    speechMessage.classList.add('is-appearing');
+    speech.classList.add('talking');
+    const duration = Math.max(2_400, Math.min(8_200, line.length * 70 + 450));
+    speakingUntil = Date.now() + duration;
+
+    let ended = false;
+    function advance() {
+      if (ended || token !== speechToken || activeId === null) return;
+      ended = true;
+      clearTimeout(speechTimer);
+      speechTimer = setTimeout(function () { showNextLine(token); }, 320);
+    }
+    const voiced = say(line, advance);
+    // Watchdog prevents broken speech engines from locking the bubble forever.
+    speechTimer = setTimeout(advance, voiced ? Math.min(18_000, Math.max(9_500, duration * 2)) : duration);
+  }
+
+  function stopReading() {
+    cancelNarration();
     reading.hidden = true;
     activeId = null;
     activeUntil = 0;
     speakingUntil = 0;
     speech.classList.remove('talking');
+    speechMessage.classList.remove('is-appearing');
     document.querySelector?.('.host')?.classList.remove('is-reading');
+    const progress = document.getElementById('speech-progress');
+    if (progress) progress.hidden = true;
     speechTitle.textContent = 'Selamat datang di LIVE ✨';
     speechMessage.textContent = 'Tulis CINTA, NASIB, atau KARIR di komentar. Ramalan muncul setelah gift atau target like tercapai.';
     document.getElementById('viewer-label').textContent = 'Menanti energi baik...';
     status.textContent = 'Menunggu pembacaan tarot.';
-    try { if ('speechSynthesis' in window) speechSynthesis.cancel(); } catch (_) {}
   }
 
   function present(draw) {
@@ -115,6 +194,7 @@
     if (!demo && (!Number.isFinite(eventAge) || eventAge < -15_000 || eventAge > MAX_CLIENT_AGE_MS)) return;
     const id = String(draw.id);
     if (id === lastId) return;
+    cancelNarration(); // New gift/like always starts a fresh conversation.
     lastId = id;
     activeId = id;
     activeUntil = Date.now() + HIDE_AFTER_MS;
@@ -131,12 +211,11 @@
       : 'Ramalan untuk ' + brief(username, 23);
     const readingLabel = document.querySelector?.('.reading__label');
     if (readingLabel) readingLabel.textContent = titleTopic ? 'PESAN ' + titleTopic.toUpperCase() : 'PESAN KARTU';
-    speechMessage.textContent = brief(message, 115);
-    speakingUntil = Date.now() + Math.min(16_000, Math.max(3800, message.length * 80));
-    speech.classList.add('talking');
+    speechLines = splitSpeech(message);
+    speechIndex = 0;
     document.querySelector?.('.host')?.classList.add('is-reading');
     document.getElementById('reading-name').textContent = 'Untuk ' + username;
-    document.getElementById('reading-summary').textContent = message;
+    document.getElementById('reading-summary').textContent = brief(draw.summary || message, 145);
     document.getElementById('viewer-label').textContent = username + ' · ' + (isLike ? 'Terima kasih untuk like!' : 'Terima kasih sudah hadir!');
     document.getElementById('reading-gift').textContent = giftName ? ((isLike ? '♥ ' : '🎁 ') + giftName + (Number(draw.giftCount) > 1 && !isLike ? ' ×' + Math.min(Number(draw.giftCount), 1000000) : '')) : '✦ Ramalan Baru';
     const firstPath = String(draw.cards[0] && draw.cards[0].image || '');
@@ -166,8 +245,8 @@
     reading.hidden = false;
     status.textContent = 'Ramalan baru untuk ' + username + ': ' + message;
     clearTimeout(closeTimer);
-    closeTimer = setTimeout(function () { if (activeId === id) stopReading(); }, HIDE_AFTER_MS);
-    say('Ramalan untuk ' + username + '. ' + cardTitle(draw.cards[0]) + '. ' + message);
+    closeTimer = setTimeout(function () { if (activeId === id) stopReading(); }, MAX_READING_MS);
+    showNextLine(speechToken);
   }
 
   const demoDraw = {
@@ -215,21 +294,25 @@
         voiceEnabled = !voiceEnabled;
         soundToggle.textContent = voiceEnabled ? '🔊 Suara aktif' : '🔇 Suara mati';
         soundToggle.setAttribute('aria-pressed', String(voiceEnabled));
-        if (!voiceEnabled) speechSynthesis.cancel();
+        if (activeId !== null && speechLines.length) {
+          // Replay the current sentence with the newly selected sound setting.
+          speechIndex = Math.max(0, speechIndex - 1);
+          ++speechToken;
+          clearTimeout(speechTimer);
+          speechSynthesis.cancel();
+          showNextLine(speechToken);
+        } else if (!voiceEnabled) speechSynthesis.cancel();
       };
     }
   }
   document.addEventListener('visibilitychange', function () {
     if (!document.hidden && !demo) schedule(0);
-    if (document.hidden) {
-      try { if ('speechSynthesis' in window) speechSynthesis.cancel(); } catch (_) {}
-    }
+    if (document.hidden && activeId !== null) stopReading();
   });
   window.addEventListener('pagehide', function () {
     clearTimeout(pollTimer);
     clearTimeout(closeTimer);
-    clearTimeout(voiceTimer);
-    try { if ('speechSynthesis' in window) speechSynthesis.cancel(); } catch (_) {}
+    cancelNarration();
   });
   if (demo) present(demoDraw);
   else schedule(0);
