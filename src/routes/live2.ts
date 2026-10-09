@@ -8,7 +8,7 @@ export function live2OverlayPage(): string {
 <meta name="theme-color" content="#110b20">
 <meta name="color-scheme" content="dark">
 <title>Jalur Tarot — LIVE 2 Magical Host</title>
-<link rel="stylesheet" href="/live2.css?v=20261009-4">
+<link rel="stylesheet" href="/live2.css?v=20261009-5">
 <script src="/vendor/three.r146.min.js" defer></script>
 <script src="/vendor/GLTFLoader.r146.js" defer></script>
 <script src="/live2.js?v=20261009-4" defer></script>
