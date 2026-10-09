@@ -184,7 +184,8 @@ export function liveOverlayPage(): string {
 <title>Jalur Tarot — LIVE 1 Reading</title>
 <link rel="stylesheet" href="/live1.css?v=20261010-1">
 <link rel="stylesheet" href="/overlay-fullscreen.css?v=20261009-1">
-<script src="/live1.js?v=20261010-1" defer></script>
+<script src="/live-queue.js?v=20261010-1" defer></script>
+<script src="/live1.js?v=20261010-2" defer></script>
 <script src="/overlay-fullscreen.js?v=20261009-1" defer></script>
 </head>
 <body>
@@ -201,7 +202,7 @@ export function liveOverlayPage(): string {
       <p class="idle__eyebrow">✧ KARTU · ENERGI · PESAN ✧</p>
       <h1 class="idle__title">Menunggu <em>Pesan Semesta</em></h1>
       <p class="idle__description">Setiap pertanyaan punya cerita.<br>Semesta punya pesan untukmu.</p>
-      <p class="idle__status" role="status"><span class="idle__pulse" aria-hidden="true"></span>Siap menerima ramalan berikutnya</p>
+      <p class="idle__status" role="status"><span class="idle__pulse" aria-hidden="true"></span><span id="idle-queue-count">Siap menerima ramalan berikutnya</span></p>
     </div>
     <div class="idle__deck" aria-hidden="true">
       <div class="idle__orbit"></div>
