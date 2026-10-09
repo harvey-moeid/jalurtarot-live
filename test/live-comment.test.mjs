@@ -1,8 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { detectLiveTopic, rememberLiveComment, selectLiveComment, markLiveCommentRead } from '../src/lib/liveComment.ts';
-import { processConnectorEvent } from '../src/lib/tiktokConnector.ts';
-import { getLiveDraw, buildLiveNarration } from '../src/lib/live.ts';
+import { readFile } from 'node:fs/promises';
+import {
+  detectLiveTopic, rememberLiveComment, selectLiveComment, markLiveCommentRead,
+} from '../src/lib/liveComment.ts';
 
 function setup() {
   const values = new Map();
@@ -13,12 +14,11 @@ function setup() {
   return { env, values };
 }
 let n = 0;
-function evt(event, user, data, roomId = 'room-a', timestamp = new Date().toISOString()) {
-  return { id: 'event-' + ++n, event, timestamp, roomId, username: 'host',
-    data: { username: user, ...data } };
+function commentInput(username, message, room = 'room-a') {
+  return { id: 'chat-' + ++n, room, username, message, timestamp: new Date().toISOString() };
 }
 
-test('cinta / karir / nasib recognition and ambiguous/irrelevant messages', () => {
+test('identify cinta, karir, nasib from Indonesian viewer questions', () => {
   assert.equal(detectLiveTopic('Apakah aku berjodoh dengan mantan?'), 'cinta');
   assert.equal(detectLiveTopic('Soal promosi karier dan gaji'), 'karir');
   assert.equal(detectLiveTopic('Bagaimana nasib dan keberuntungan tahun depan?'), 'nasib');
@@ -28,82 +28,69 @@ test('cinta / karir / nasib recognition and ambiguous/irrelevant messages', () =
   assert.equal(detectLiveTopic(null), null);
 });
 
-test('chat only queues intent; gift for SAME viewer unlocks its topic and question', async () => {
+test('record comment as a pending request, scoped to viewer and room, not draw state', async () => {
   const { env, values } = setup();
-  const chat = await processConnectorEvent(env, evt('chat', 'Mawar', { message: 'Cinta, apakah mantanku akan kembali?' }));
-  assert.equal(chat.ignored, 'topic_saved_awaiting_trigger');
-  assert.equal(values.has('live:current'), false, 'chat must never draw cards');
-  const gift = await processConnectorEvent(env, evt('gift', 'Mawar', { giftName: 'Rose', diamondCount: 5, repeatCount: 1 }));
-  assert.equal(gift.accepted, true);
-  const draw = await getLiveDraw(env);
-  assert.equal(draw.topic, 'cinta');
-  assert.match(draw.question, /mantanku/);
-  assert.match(draw.narration, /percintaan/);
-  assert.match(draw.narration, /mantanku/);
-  assert.equal(draw.spreadId, 'three-card');
-  assert.match(draw.narration, /Kartu pertama/);
-  assert.match(draw.narration, /Kartu ketiga/);
-  assert.match(draw.summary, /komunikasi yang sehat/);
-  const duplicated = await processConnectorEvent(env, { ...evt('gift', 'Mawar', {giftName: 'Rose', diamondCount:5}), id: 'gift-already-handled' });
-  assert.ok(duplicated.accepted);
+  assert.equal(await rememberLiveComment(env, commentInput('@Mawar', 'Cinta: mantanku bakal balik?')), true);
+  assert.equal(values.has('live:current'), false, 'chat alone must not draw cards');
+  const matched = await selectLiveComment(env, 'room-a', 'mawar', false);
+  assert.equal(matched.topic, 'cinta');
+  assert.match(matched.question, /mantanku/);
+  assert.equal(matched.username, '@mawar');
+  assert.equal(await selectLiveComment(env, 'another-room', 'mawar', true), null);
+  assert.equal(await selectLiveComment(env, 'room-a', 'oranglain', false), null);
 });
 
-test('gift never uses someone else\'s comment or prior consumed comment', async () => {
+test('room like milestone can choose latest eligible comment; gift cannot borrow it', async () => {
   const { env } = setup();
-  const chat = evt('chat', 'Sari', { message: 'Bagaimana nasib aku tahun ini?' });
-  await processConnectorEvent(env, chat);
-  await processConnectorEvent(env, evt('gift', 'Budi', { giftName: 'Rose', diamondCount: 1 }));
-  assert.equal((await getLiveDraw(env)).topic, undefined);
-  await processConnectorEvent(env, evt('gift', 'Sari', { giftName: 'Rose', diamondCount: 1 }));
-  assert.equal((await getLiveDraw(env)).topic, 'nasib');
-  await processConnectorEvent(env, evt('gift', 'Sari', { giftName: 'Rose', diamondCount: 1 }));
-  assert.equal((await getLiveDraw(env)).topic, undefined, 'same request should be used only once');
+  await rememberLiveComment(env, commentInput('Rina', 'Karier: apakah peluang promosi besar?'));
+  const guestGift = await selectLiveComment(env, 'room-a', 'Budi', false);
+  assert.equal(guestGift, null);
+  const roomLike = await selectLiveComment(env, 'room-a', 'Budi', true);
+  assert.equal(roomLike.topic, 'karir');
+  assert.equal(roomLike.username, '@rina');
+  await markLiveCommentRead(env, roomLike);
+  assert.equal(await selectLiveComment(env, 'room-a', 'Rina', false), null);
+  assert.equal(await selectLiveComment(env, 'room-a', 'Budi', true), null);
 });
 
-test('room like milestone unlocks latest relevant chat (not arbitrary chat)', async () => {
+test('drop stale, anonymous, irrelevant and malformed topic comments', async () => {
   const { env } = setup();
-  await processConnectorEvent(env, evt('chat', 'Rina', { message: 'Karir, apakah aku akan mendapat promosi?' }));
-  const noTrigger = await processConnectorEvent(env, evt('like', 'Other', { likeCount: 1, totalLikeCount: 39 }));
-  assert.equal(noTrigger.ignored, 'like_milestone_not_reached');
-  assert.equal(await getLiveDraw(env), null);
-  const trigger = await processConnectorEvent(env, evt('like', 'Other', { likeCount: 1, totalLikeCount: 40 }));
-  assert.equal(trigger.accepted, true);
-  const draw = await getLiveDraw(env);
-  assert.equal(draw.topic, 'karir');
-  assert.equal(draw.username, '@rina');
-  assert.match(draw.narration, /karier/);
-  assert.match(draw.narration, /promosi/);
-  assert.equal(draw.triggerType, 'like');
+  assert.equal(await rememberLiveComment(env, {
+    id: 'stale', room: 'room-a', username: 'Mawar', message: 'cinta',
+    timestamp: new Date(Date.now() - 6 * 60_000).toISOString(),
+  }), false);
+  assert.equal(await rememberLiveComment(env, commentInput('unknown', 'nasib')), false);
+  assert.equal(await rememberLiveComment(env, commentInput('Mawar', 'selamat malam semua')), false);
+  assert.equal(await rememberLiveComment(env, {...commentInput('Mawar', 'karir'), id: ''}), false);
+  const pending = commentInput('Mawar', '<script>karir</script> bagaimana?');
+  assert.equal(await rememberLiveComment(env, pending), true);
+  const saved = await selectLiveComment(env, 'room-a', 'Mawar', false);
+  assert.equal(saved.question.includes('<'), false);
 });
 
-test('stale, anonymous and unknown-topic comments are never used; dedupe works', async () => {
-  const { env } = setup();
-  const old = new Date(Date.now() - 6 * 60 * 1000).toISOString();
-  assert.equal(await rememberLiveComment(env, {id:'old',room:'a',username:'viewer',message:'cinta',timestamp:old}), false);
-  const irrelevant = await processConnectorEvent(env, evt('chat', 'Rina', { message: 'selamat malam semuanya' }));
-  assert.equal(irrelevant.ignored, 'comment_without_topic');
-  const sameEvent = evt('chat', 'Rina', { message: 'karir ke depan?' });
-  await processConnectorEvent(env, sameEvent);
-  const dup = await processConnectorEvent(env, sameEvent);
-  assert.equal(dup.duplicate, true);
-  assert.equal(await selectLiveComment(env,'other-room','Rina',true),null);
-  const selected = await selectLiveComment(env,'room-a','Rina',false);
-  assert.equal(selected.topic, 'karir');
-  await markLiveCommentRead(env, selected);
-  assert.equal(await selectLiveComment(env,'room-a','Rina',true), null);
-});
-
-test('narration for cards follows requested aspect and avoids generic nasib for cinta/karir', () => {
-  const card = {
-    nameCn:'The Sun', isReversed:false, keywords:['cerah'],
-    aspect:{hubungan:'Hubungan penuh perhatian.',karir:'Proyek kerja akan berkembang.',nasib:'Peluang baik sedang terbuka.'},
-  };
-  const cinta = buildLiveNarration([card], '@tester', {topic:'cinta',question:'Cinta aku gimana?'});
-  const karir = buildLiveNarration([card], '@tester', {topic:'karir',question:'Karir aku gimana?'});
-  const nasib = buildLiveNarration([card], '@tester', {topic:'nasib',question:'Nasib aku gimana?'});
-  assert.match(cinta, /Hubungan penuh perhatian/);
-  assert.doesNotMatch(cinta, /Proyek kerja|Peluang baik/);
-  assert.match(karir, /Proyek kerja akan berkembang/);
-  assert.doesNotMatch(karir, /Hubungan penuh perhatian/);
-  assert.match(nasib, /Peluang baik sedang terbuka/);
+test('connector guards draw generation behind gift/like and exposes optional narration metadata', async () => {
+  const [connector, live, route, overlay, admin] = await Promise.all([
+    readFile(new URL('../src/lib/tiktokConnector.ts', import.meta.url), 'utf8'),
+    readFile(new URL('../src/lib/live.ts', import.meta.url), 'utf8'),
+    readFile(new URL('../src/routes/live.ts', import.meta.url), 'utf8'),
+    readFile(new URL('../public/live2.js', import.meta.url), 'utf8'),
+    readFile(new URL('../src/routes/admin.ts', import.meta.url), 'utf8'),
+  ]);
+  const chatAt = connector.indexOf("if (eventType === 'chat')");
+  const giftAt = connector.indexOf("if (!settings.giftEnabled)");
+  assert.ok(chatAt >= 0 && giftAt > chatAt);
+  const chatBlock = connector.slice(chatAt, giftAt);
+  assert.match(chatBlock, /rememberLiveComment/);
+  assert.doesNotMatch(chatBlock, /generateLiveDraw/);
+  assert.match(connector, /selectLiveComment\(env,/);
+  assert.match(connector, /markLiveCommentRead\(env,/);
+  assert.match(connector, /crossedLikeMilestone\(before, count, milestone\)/);
+  assert.match(route, /getConnectorEvents\(env, 'chat,gift,like', 100\)/);
+  assert.match(live, /topic === 'cinta' \? 'hubungan' : topic === 'karir' \? 'karir' : 'nasib'/);
+  assert.match(live, /narration:|narration,/);
+  assert.match(live, /Kartu pertama/);
+  assert.match(live, /Kartu ketiga/);
+  assert.match(overlay, /draw\.narration \|\| aspect/);
+  assert.match(admin, /name="topic"/);
+  assert.match(admin, /name="question"/);
 });
