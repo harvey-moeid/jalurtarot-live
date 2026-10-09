@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
-import ts from 'typescript';
+import { stripTypeScriptTypes } from 'node:module';
 import { readFile } from 'node:fs/promises';
 
 const [serverCode, clientCode, wrangler] = await Promise.all([
@@ -58,17 +58,18 @@ class FakeSql {
   }
 }
 function harness() {
-  const js = ts.transpileModule(serverCode,{compilerOptions:{
-    target:9,module:1, // ES2022 / CommonJS: TS 7 omits legacy runtime enum exports
-  }}).outputText;
+  const inlinePolicy = `const crossedLikeMilestone = (before, after, milestone) =>
+    Number.isSafeInteger(before) && Number.isSafeInteger(after) && milestone > 0 &&
+    after > before && Math.floor(after / milestone) > Math.floor(before / milestone);`;
+  const js = stripTypeScriptTypes(
+    serverCode
+      .replace("import { crossedLikeMilestone } from './liveSettings';", inlinePolicy)
+      .replace('export class LiveReadingQueue', 'class LiveReadingQueue') +
+    '\\nexports.LiveReadingQueue = LiveReadingQueue;',
+    { mode:'strip' },
+  );
   const exports = {};
-  const policy = (before,after,milestone) => Number.isSafeInteger(before)&&
-    Number.isSafeInteger(after)&&milestone>0&&after>before&&
-    Math.floor(after/milestone)>Math.floor(before/milestone);
-  vm.runInNewContext(js,{exports,require(name) {
-    if(name==='./liveSettings')return {crossedLikeMilestone:policy};
-    throw Error('Unexpected import '+name);
-  },Date,URL,Response,console},{timeout:2000});
+  vm.runInNewContext(js,{exports,Date,URL,Response,console},{timeout:2000});
   const sql = new FakeSql();
   const server = new exports.LiveReadingQueue({
     storage:{sql,transactionSync(cb){return cb();}},
