@@ -180,6 +180,7 @@ test('alternative GLB decoder recovers uploaded model if primary loader fails', 
     'speech-message','sound-toggle','host3d','viewer-label','reading-name',
     'reading-summary','reading-gift','host-model-debug']) elements.set(id, element());
   const sceneModels = [];
+  const capturedWarnings = [];
   class Group {
     constructor() {
       this.children = [];
@@ -260,12 +261,12 @@ test('alternative GLB decoder recovers uploaded model if primary loader fails', 
     fetch: async () => ({ ok: true, arrayBuffer: async () => bytes }),
     setTimeout() { return 1; }, clearTimeout() {},
     requestAnimationFrame() { return 1; }, cancelAnimationFrame() {},
-    console: { warn() {} },
+    console: { warn(...args) { capturedWarnings.push(args.map(String).join(' | ')); } },
   };
   assert.doesNotThrow(() => vm.runInNewContext(src, fake, { timeout: 2000 }));
   await new Promise(resolve => setImmediate(resolve));
   assert.equal(elements.get('live2').attrs['data-model-state'], 'custom',
-    elements.get('host-model-debug').textContent);
+    elements.get('host-model-debug').textContent + ' WARNINGS: ' + capturedWarnings.join(' / '));
   assert.match(elements.get('host-model-debug').textContent, /renderer alternatif/);
   const host = sceneModels.find(model => model && model.name === 'TarotHost');
   assert.ok(host, 'decoded model is added to the Three.js scene');
