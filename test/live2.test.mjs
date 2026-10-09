@@ -20,7 +20,7 @@ test('LIVE 2 has a dedicated 9:16 overlay, assets and accessible labels', async 
   assert.match(html, /\/models\/jalur-tarot-host\.svg/);
   assert.match(html, /id="host-model-debug"/);
   assert.match(html, /src="\/live2\.js\?v=20261009-4"/);
-  assert.match(html, /href="\/live2\.css\?v=20261009-4"/);
+  assert.match(html, /href="\/live2\.css\?v=20261009-5"/);
   assert.match(html, /aria-live="polite"/);
   assert.match(css, /background:\s*transparent/, 'OBS must remain transparent by default');
   assert.match(css, /prefers-reduced-motion/);

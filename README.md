@@ -208,6 +208,16 @@ mungkin membutuhkan waktu singkat untuk propagasi antar lokasi Cloudflare.
 - Model GLB asli tidak dihapus dan hanya diaktifkan dengan `/live2?character=glb&debug=1` untuk diagnosis. Mode default menghindari masalah tekstur putih/WebGL di OBS dan ponsel.
 - LIVE 1, API state, pengaturan gift/like, dan webhook tetap tidak berubah. Untuk uji visual buka `/live2?demo=1&background=1`, refresh OBS Browser Source setelah deploy.
 
+
+### LIVE 2 — responsif portrait dan landscape (9 Oktober 2026)
+
+Tata letak otomatis mengikuti rasio Browser Source/viewport, tanpa parameter tambahan:
+- **Portrait 9:16** (misalnya OBS **1080 × 1920**): judul di atas; karakter dan speech bubble di area tengah-atas; panel 1–3 kartu dalam baris khusus; CTA di kaki layar. Karakter tidak menutupi panel ramalan.
+- **Landscape 16:9** (misalnya OBS **1920 × 1080**): judul di atas; speech bubble + panel hasil di sisi kiri; karakter ilustrasi di sisi kanan; status dan CTA tetap berada di baris footer terpisah.
+- **Layar HP pendek / window kecil**: teks dan jarak dipadatkan, ornamen sekunder disembunyikan, batas panel tetap jelas.
+- **Mode transparan** untuk OBS tetap default; tambah `?background=1` jika ingin latar penuh, dan `?demo=1` untuk simulasi 3 kartu tanpa TikTok.
+- Setelah deploy, **refresh Browser Source** di OBS agar `live2.css?v=20261009-5` tidak memakai versi cache sebelumnya. LIVE 1 dan webhook tidak berubah.
+
 ### LIVE 2 — overlay portrait 3D bergerak
 
 URL OBS Browser Source baru (LIVE 1 tetap di `/live`):
