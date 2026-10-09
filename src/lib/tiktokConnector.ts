@@ -240,7 +240,15 @@ export async function processConnectorEvent(
     comment ? { topic: comment.topic, question: comment.question } : undefined);
   const outcome = await enqueueGift(env, draw, marker || 'gift:'+draw.id);
   if (!outcome.accepted) throw new Error('Gagal menambahkan gift ke antrean.');
-  if (!outcome.duplicate && comment) await markLiveCommentRead(env, comment);
+  if (!outcome.duplicate) {
+    // Best-effort mirror for old clients; does not control the durable queue.
+    try {
+      await env.RATE_LIMIT_KV.put('live:current',JSON.stringify(draw), { expirationTtl: 21_600 });
+    } catch (error) {
+      console.warn('Legacy gift state mirror failed, durable queue persisted',error);
+    }
+    if (comment) await markLiveCommentRead(env, comment);
+  }
   return outcome.duplicate ? { accepted:true, duplicate:true } :
     { accepted: true, drawId: outcome.drawId };
 }
