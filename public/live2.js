@@ -7,6 +7,8 @@
   const soundWanted = query.get('voice') === '1';
   const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
   const overlay = document.getElementById('live2');
+  const queue = window.LiveReadingQueue ? window.LiveReadingQueue.connect('live2') : null;
+  let activeQueueItem = null;
   const reading = document.getElementById('reading');
   const cardsPanel = document.getElementById('reading-cards');
   const status = document.getElementById('live-status');
@@ -45,6 +47,7 @@
   let polling = false;
   let pollTimer = 0;
   let closeTimer = 0;
+  let maxReadingTimer = 0;
   let speechTimer = 0;
   let speechToken = 0;
   let speechLines = [];
@@ -138,6 +141,7 @@
     ++speechToken; // Invalidates old timers and stale utterance callbacks.
     clearTimeout(speechTimer);
     clearTimeout(closeTimer);
+    clearTimeout(maxReadingTimer);
     speechLines = [];
     speechIndex = 0;
     speakingUntil = 0;
@@ -182,8 +186,12 @@
     speechTimer = setTimeout(advance, voiced ? Math.min(25_000, Math.max(11_000, line.length * 140)) : duration);
   }
 
-  function stopReading() {
+  function stopReading(completed = true) {
     cancelNarration();
+    if (activeQueueItem && queue && completed) queue.finish(activeQueueItem);
+    activeQueueItem = null;
+    // Aborted/hidden reading will replay from the durable queue on resume.
+    if (!completed) lastId = null;
     reading.hidden = true;
     activeId = null;
     activeUntil = 0;
@@ -197,13 +205,14 @@
     speechMessage.textContent = 'Tulis CINTA, NASIB, atau KARIR di komentar. Ramalan muncul setelah gift atau target like tercapai.';
     document.getElementById('viewer-label').textContent = 'Menanti energi baik...';
     status.textContent = 'Menunggu pembacaan tarot.';
+    if (queue && !document.hidden) schedule(0);
   }
 
   function present(draw) {
     if (!draw || !Array.isArray(draw.cards) || draw.cards.length < 1) return;
     if (typeof draw.id !== 'string' && typeof draw.id !== 'number') return;
     const eventAge = Date.now() - Number(draw.createdAt);
-    if (!demo && (!Number.isFinite(eventAge) || eventAge < -15_000 || eventAge > MAX_CLIENT_AGE_MS)) return;
+    if (!demo && !queue && (!Number.isFinite(eventAge) || eventAge < -15_000 || eventAge > MAX_CLIENT_AGE_MS)) return;
     const id = String(draw.id);
     if (id === lastId) return;
     cancelNarration(); // New gift/like always starts a fresh conversation.
@@ -257,7 +266,7 @@
     reading.hidden = false;
     status.textContent = 'Ramalan baru untuk ' + username + ': ' + message;
     clearTimeout(closeTimer);
-    closeTimer = setTimeout(function () { if (activeId === id) stopReading(); }, MAX_READING_MS);
+    maxReadingTimer = setTimeout(function () { if (activeId === id) stopReading(); }, MAX_READING_MS);
     showNextLine(speechToken);
   }
 
@@ -277,6 +286,34 @@
     if (polling || demo) return;
     if (document.hidden) { schedule(3000); return; }
     polling = true;
+    if (queue) {
+      try {
+        const payload = await queue.next();
+        const count = document.getElementById('queue-indicator');
+        if (count) count.textContent = payload.pending > 0
+          ? 'Antrean ' + payload.pending + ' bacaan' : '';
+        if (payload.item && activeId === null) {
+          activeQueueItem = payload.item;
+          if (Array.isArray(payload.item.draw?.cards) && payload.item.draw.cards.length) {
+            present(payload.item.draw);
+            // Old duplicate ID or rejected invalid item must not stall playback.
+            if (activeId !== String(payload.item.draw.id)) {
+              queue.finish(payload.item);
+              activeQueueItem = null;
+            }
+          } else {
+            queue.finish(payload.item);
+            activeQueueItem = null;
+          }
+        }
+      } catch (_) {
+        // Keep the reading visible and retry on the next poll.
+      } finally {
+        polling = false;
+        schedule(POLL_INTERVAL_MS);
+      }
+      return;
+    }
     const ctrl = new AbortController();
     const abort = setTimeout(() => ctrl.abort(), 8000);
     try {
@@ -319,7 +356,7 @@
   }
   document.addEventListener('visibilitychange', function () {
     if (!document.hidden && !demo) schedule(0);
-    if (document.hidden && activeId !== null) stopReading();
+    if (document.hidden && activeId !== null) stopReading(false);
   });
   window.addEventListener('pagehide', function () {
     clearTimeout(pollTimer);

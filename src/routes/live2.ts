@@ -12,7 +12,8 @@ export function live2OverlayPage(): string {
 <link rel="stylesheet" href="/overlay-fullscreen.css?v=20261009-1">
 <script src="/vendor/three.r146.min.js" defer></script>
 <script src="/vendor/GLTFLoader.r146.js" defer></script>
-<script src="/live2.js?v=20261010-2" defer></script>
+<script src="/live-queue.js?v=20261010-1" defer></script>
+<script src="/live2.js?v=20261010-3" defer></script>
 <script src="/overlay-fullscreen.js?v=20261009-1" defer></script>
 </head>
 <body>
@@ -45,7 +46,7 @@ export function live2OverlayPage(): string {
     <div class="reading__gift" id="reading-gift"></div>
   </section>
   <footer class="footer">
-    <div class="footer__viewer"><span aria-hidden="true">☾</span><span id="viewer-label">Menanti energi baik...</span></div>
+    <div class="footer__viewer"><span aria-hidden="true">☾</span><span id="viewer-label">Menanti energi baik...</span><small class="queue-indicator" id="queue-indicator" aria-live="off"></small></div>
     <div class="footer__cta"><span aria-hidden="true">🎁</span> Gift atau Target Like = Ramalan <small>komentar: cinta · nasib · karir</small></div>
     <p>SETIAP KARTU ADALAH PESAN ✧ SETIAP KAMU PUNYA CERITA</p>
   </footer>

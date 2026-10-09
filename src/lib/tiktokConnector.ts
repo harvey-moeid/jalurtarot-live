@@ -1,7 +1,8 @@
-import { generateLiveDraw, saveLiveDraw, type LiveSpreadId } from './live';
+import { generateLiveDraw, type LiveSpreadId } from './live';
+import { enqueueGift, processQueuedLikes, type LiveQueueEnv } from './liveQueue';
 import { rememberLiveComment, selectLiveComment, markLiveCommentRead } from './liveComment';
 
-export type TikTokConnectorEnv = {
+export type TikTokConnectorEnv = LiveQueueEnv & {
   RATE_LIMIT_KV: KVNamespace;
   TIKTOK_CONNECTOR_URL?: string;
   TIKTOK_CONNECTOR_API_KEY?: string;
@@ -36,7 +37,7 @@ const DEFAULT_CONNECTOR_URL = 'https://tiktok-live-konektor.onrender.com';
 const REQUEST_TIMEOUT_MS = 8_000;
 const PROCESSED_EVENT_TTL_SECONDS = 6 * 60 * 60;
 
-import { crossedLikeMilestone, getLiveSettings } from './liveSettings';
+import { getLiveSettings } from './liveSettings';
 
 export function connectorBaseUrl(env: TikTokConnectorEnv): string {
   const raw = String(env.TIKTOK_CONNECTOR_URL || DEFAULT_CONNECTOR_URL).trim().replace(/\/+$/, '');
@@ -130,7 +131,9 @@ function normalizedViewerName(event: ConnectorEvent): string {
 
 function eventMarkerKey(event: ConnectorEvent): string | null {
   const id = String(event.id || '').trim();
-  return id ? 'live:connector:event:' + id.slice(0, 160) : null;
+  const kind=String(event.event || 'unknown').toLowerCase().slice(0, 15);
+  const room=String(event.roomId || 'default').replace(/[^a-zA-Z0-9_-]/g,'').slice(0,55);
+  return id ? 'live:connector:event:' + kind + ':' + room + ':' + id.slice(0, 120) : null;
 }
 
 type ProcessedEventResult = { accepted: boolean; duplicate?: boolean; ignored?: string; drawId?: string };
@@ -152,47 +155,31 @@ async function processLike(
   if (!Number.isFinite(timestamp) || Math.abs(Date.now() - timestamp) > 5 * 60 * 1000) {
     return { accepted: false, ignored: 'stale_like_event' };
   }
-  if (await env.RATE_LIMIT_KV.get(marker)) return { accepted: true, duplicate: true };
-
   const data = event.data || {};
   const delta = safeCount(data.likeCount);
   if (!delta) return { accepted: false, ignored: 'invalid_like_count' };
   const room = String(event.roomId || event.username || 'unknown').replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 70);
-  const counterKey = 'live:connector:likes:' + (room || 'unknown');
-  const raw = await env.RATE_LIMIT_KV.get(counterKey);
-  let previous = 0;
-  if (raw) {
-    const parsed: unknown = JSON.parse(raw);
-    if (!parsed || typeof parsed !== 'object' || !Number.isSafeInteger((parsed as any).count) || (parsed as any).count < 0) {
-      throw new Error('Counter like di KV tidak valid.');
+  // The like counter, dedup marker and milestone transition are committed
+  // atomically in the SAME Durable Object as the reading queue.
+  const requester = normalizedViewerName(event);
+  const comment = await selectLiveComment(env, String(event.roomId || event.username || 'unknown'), requester, true);
+  const recipient = comment?.username || requester;
+  const draw = generateLiveDraw(spreadId, recipient, milestone + ' Like', milestone, 'like',
+    comment ? { topic: comment.topic, question: comment.question } : undefined);
+  const outcome = await processQueuedLikes(env, {
+    eventKey: marker, room: room || 'unknown', delta,
+    total: safeCount(data.totalLikeCount), milestone, draw,
+  });
+  if (outcome.drawId) {
+    // Legacy /api/live/state remains compatible; queue is the source of truth.
+    try {
+      await env.RATE_LIMIT_KV.put('live:current', JSON.stringify(draw), { expirationTtl: 21_600 });
+    } catch (error) {
+      console.warn('Legacy like state mirror failed, durable queue persisted',error);
     }
-    previous = (parsed as { count: number }).count;
-  }
-  // Prefer totalLikeCount when the connector reports an increasing room total.
-  // When not available, sum event likeCount (best effort under KV concurrency).
-  const total = safeCount(data.totalLikeCount);
-  const before = !raw && total ? Math.max(0, total - delta) : previous;
-  const count = total ? Math.max(previous, total) : previous + delta;
-  if (!Number.isSafeInteger(count)) throw new Error('Akumulasi like melewati batas aman.');
-
-  const crossed = crossedLikeMilestone(before, count, milestone);
-  let drawId: string | undefined;
-  if (crossed) {
-    // Satu draw per event agar lonjakan like tidak menimpa overlay berkali-kali.
-    const requester = normalizedViewerName(event);
-    // Room milestone can resolve the latest eligible viewer request, even when
-    // another viewer happens to send the like that crosses the threshold.
-    const comment = await selectLiveComment(env, String(event.roomId || event.username || 'unknown'), requester, true);
-    const recipient = comment?.username || requester;
-    const draw = generateLiveDraw(spreadId, recipient, milestone + ' Like', milestone, 'like',
-      comment ? { topic: comment.topic, question: comment.question } : undefined);
-    if (!await saveLiveDraw(env, draw)) throw new Error('Gagal menyimpan draw like ke KV.');
     if (comment) await markLiveCommentRead(env, comment);
-    drawId = draw.id;
   }
-  await env.RATE_LIMIT_KV.put(counterKey, JSON.stringify({ count }), { expirationTtl: PROCESSED_EVENT_TTL_SECONDS });
-  await env.RATE_LIMIT_KV.put(marker, '1', { expirationTtl: PROCESSED_EVENT_TTL_SECONDS });
-  return drawId ? { accepted: true, drawId } : { accepted: true, ignored: 'like_milestone_not_reached' };
+  return outcome;
 }
 
 export async function processConnectorEvent(
@@ -225,8 +212,6 @@ export async function processConnectorEvent(
     return processLike(env, event, settings.likeMilestone, settings.likeSpread, marker);
   }
   if (!settings.giftEnabled) return { accepted: false, ignored: 'gift_disabled' };
-  if (marker && await env.RATE_LIMIT_KV.get(marker)) return { accepted: true, duplicate: true };
-
   const data = event.data || {};
   const giftName = String(data.giftName || 'Gift').slice(0, 80);
   const target = settings.targetGiftName;
@@ -253,9 +238,17 @@ export async function processConnectorEvent(
     normalizedViewerName(event), false);
   const draw = generateLiveDraw(spreadId, normalizedViewerName(event), giftName, repeatCount, 'gift',
     comment ? { topic: comment.topic, question: comment.question } : undefined);
-  if (!await saveLiveDraw(env, draw)) throw new Error('Gagal menyimpan draw connector ke KV.');
-  if (comment) await markLiveCommentRead(env, comment);
-
-  if (marker) await env.RATE_LIMIT_KV.put(marker, '1', { expirationTtl: PROCESSED_EVENT_TTL_SECONDS });
-  return { accepted: true, drawId: draw.id };
+  const outcome = await enqueueGift(env, draw, marker || 'gift:'+draw.id);
+  if (!outcome.accepted) throw new Error('Gagal menambahkan gift ke antrean.');
+  if (!outcome.duplicate) {
+    // Best-effort mirror for old clients; does not control the durable queue.
+    try {
+      await env.RATE_LIMIT_KV.put('live:current',JSON.stringify(draw), { expirationTtl: 21_600 });
+    } catch (error) {
+      console.warn('Legacy gift state mirror failed, durable queue persisted',error);
+    }
+    if (comment) await markLiveCommentRead(env, comment);
+  }
+  return outcome.duplicate ? { accepted:true, duplicate:true } :
+    { accepted: true, drawId: outcome.drawId };
 }

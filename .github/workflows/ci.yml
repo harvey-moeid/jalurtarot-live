@@ -39,6 +39,8 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
+      - name: Install dependencies for queue contract tests
+        run: npm ci
       - name: Run worker regression tests
         run: npm test
 

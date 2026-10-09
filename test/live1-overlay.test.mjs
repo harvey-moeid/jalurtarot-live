@@ -61,7 +61,7 @@ function mount(search, data = null, motion = false) {
 
 test('LIVE 1 uses independent local assets with accessible story and card panels', () => {
   assert.match(markup, /href="\/live1\.css\?v=20261010-1"/);
-  assert.match(markup, /src="\/live1\.js\?v=20261010-1"/);
+  assert.match(markup, /src="\/live1\.js\?v=20261010-2"/);
   for (const id of ['stage', 'idle-screen', 'cards-row', 'summary-scroll', 'summary', 'question', 'topic']) {
     assert.ok(markup.includes('id="' + id + '"'), 'missing ' + id);
   }
