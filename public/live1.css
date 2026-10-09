@@ -164,6 +164,8 @@ body{font-family:system-ui,-apple-system,"Segoe UI",sans-serif;color:var(--ivory
     linear-gradient(160deg,#130c27 0%,#26133d 48%,#0d0b1d 100%);
 }
 .idle-screen[hidden]{display:none!important}
+.idle-screen:not([hidden]){animation:idle-screen-in .5s ease-out both}
+@keyframes idle-screen-in{from{opacity:.5}to{opacity:1}}
 .idle-screen::before{content:"";position:absolute;inset:1.4%;
   border:1px solid rgba(248,215,161,.27);border-radius:clamp(18px,3vmin,44px);
   pointer-events:none;z-index:1}
