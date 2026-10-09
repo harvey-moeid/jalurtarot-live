@@ -144,7 +144,7 @@ body{touch-action:manipulation}
 .reading__label{color:var(--gold);font-size:clamp(9px,1.5vmin,17px);
   letter-spacing:.12em;font-weight:800}
 .reading__interpretation p{display:-webkit-box;-webkit-box-orient:vertical;
-  -webkit-line-clamp:2;overflow:hidden;margin:2px 0 0;line-height:1.23;
+  -webkit-line-clamp:3;overflow:hidden;margin:2px 0 0;line-height:1.23;
   font-size:clamp(10px,1.7vmin,20px);color:#f2e1f7}
 .reading__gift{position:absolute;top:0;right:3%;max-width:47%;
   padding:3px 11px;border:1px solid rgba(238,200,157,.4);
