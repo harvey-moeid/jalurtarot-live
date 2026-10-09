@@ -17,7 +17,7 @@ test('LIVE 2 has a dedicated 9:16 overlay, assets and accessible labels', async 
   assert.match(entry, /app\.get\('\/live'/, 'LIVE 1 route must remain intact');
   assert.match(html, /id="host3d"/);
   assert.match(html, /id="host-model-debug"/);
-  assert.match(html, /src="\/live2\.js\?v=20261009-2"/);
+  assert.match(html, /src="\/live2\.js\?v=20261009-3"/);
   assert.match(html, /href="\/live2\.css\?v=20261009-2"/);
   assert.match(html, /aria-live="polite"/);
   assert.match(css, /background:\s*transparent/, 'OBS must remain transparent by default');
@@ -137,12 +137,16 @@ test('custom GLB errors appear in debug mode and original model remains fallback
     URLSearchParams,
     setTimeout() { return 1; }, clearTimeout() {},
     requestAnimationFrame() { return 1; }, cancelAnimationFrame() {},
+    fetch: async () => ({ ok: false, status: 503 }),
     console: { warn() {} },
   };
   assert.doesNotThrow(() => vm.runInNewContext(src, fake, { timeout: 2000 }));
+  await new Promise(resolve => setImmediate(resolve));
   assert.equal(requests.length, 2);
   assert.match(requests[0], /jalur-tarot-custom\.glb\?v=/);
   assert.equal(requests[1], '/models/jalur-tarot.glb');
   assert.equal(elements.get('live2').attrs['data-model-state'], 'fallback');
   assert.match(elements.get('host-model-debug').textContent, /FALLBACK/);
+  assert.match(elements.get('host-model-debug').textContent, /HTTP 503/,
+    'recovery error remains visible even after legacy fallback');
 });
