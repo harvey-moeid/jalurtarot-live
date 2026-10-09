@@ -17,12 +17,16 @@
   const canvas = document.getElementById('host3d');
   const modelDebug = document.getElementById('host-model-debug');
   const modelDebugEnabled = query.get('debug') === '1';
+  let lastModelError = '';
 
   function reportModel(state, message, error) {
     overlay.setAttribute('data-model-state', state);
+    if (error) lastModelError = safeText(error.message || error, 150);
+    if (state === 'custom') lastModelError = '';
     if (modelDebugEnabled && modelDebug) {
       modelDebug.hidden = false;
-      const cause = error ? ' — ' + safeText(error.message || error, 150) : '';
+      // Do not hide the root cause after falling back to the legacy model.
+      const cause = lastModelError && state !== 'custom' ? ' — Penyebab: ' + lastModelError : '';
       modelDebug.textContent = '3D ' + state.toUpperCase() + ': ' + message + cause;
     }
     if (error && typeof console !== 'undefined' && console.warn) {
@@ -264,6 +268,7 @@
   let head = null, leftArm = null, rightArm = null, heldPivot = null;
   let eyeLeft = null, eyeRight = null, mouth = null, heldFace = null;
   let mixer = null, mixerTime = 0, characterBaseY = 0, isCustomModel = false;
+  let usedBasicGlbLoader = false;
   let lastShownCard = '';
   let textureTicket = 0;
   const textures = new THREE.TextureLoader();
@@ -382,7 +387,138 @@
     resize();
     renderFrame(0);
     reportModel(custom ? 'custom' : 'legacy',
-      custom ? 'Karakter GLB baru berhasil ditampilkan.' : 'Karakter bawaan aktif (fallback).');
+      custom ? (usedBasicGlbLoader
+        ? 'Karakter GLB baru berhasil dimuat melalui renderer alternatif.'
+        : 'Karakter GLB baru berhasil ditampilkan.')
+        : 'Karakter bawaan aktif (fallback).');
+  }
+
+
+  // Minimal glTF 2.0 binary mesh decoder used only when GLTFLoader r146
+  // rejects a custom asset on a browser. This GLB contains one mesh with
+  // embedded baseColor JPEG; the recovery path avoids extension plugins
+  // and ImageBitmapLoader while keeping the original geometry and color.
+  function decodeBasicGlb(data) {
+    const view = new DataView(data);
+    if (view.byteLength < 28 || view.getUint32(0, true) !== 0x46546c67 ||
+      view.getUint32(4, true) !== 2 || view.getUint32(8, true) !== data.byteLength) {
+      throw new Error('Berkas GLB tidak valid atau terpotong.');
+    }
+    const jsonSize = view.getUint32(12, true);
+    if (view.getUint32(16, true) !== 0x4e4f534a ||
+      jsonSize > data.byteLength - 28) {
+      throw new Error('Struktur JSON GLB tidak valid.');
+    }
+    const json = JSON.parse(new TextDecoder().decode(new Uint8Array(data, 20, jsonSize)));
+    const binHeader = 20 + jsonSize;
+    if (view.getUint32(binHeader + 4, true) !== 0x004e4942) {
+      throw new Error('GLB tidak memiliki BIN chunk.');
+    }
+    const binLength = view.getUint32(binHeader, true);
+    const binStart = binHeader + 8;
+    if (binStart + binLength > data.byteLength) {
+      throw new Error('BIN chunk GLB terpotong.');
+    }
+    function sliceView(index) {
+      const entry = json.bufferViews[index];
+      if (!entry) throw new Error('bufferView GLB tidak tersedia.');
+      const start = binStart + (entry.byteOffset || 0);
+      const end = start + entry.byteLength;
+      if (start < binStart || end > binStart + binLength) {
+        throw new Error('bufferView GLB melebihi ukuran BIN.');
+      }
+      return [start, end];
+    }
+    function accessor(index) {
+      const acc = json.accessors[index];
+      if (!acc || !Number.isInteger(acc.bufferView) || acc.sparse) {
+        throw new Error('Accessor GLB tidak didukung.');
+      }
+      const typeLength = { SCALAR: 1, VEC2: 2, VEC3: 3, VEC4: 4 }[acc.type];
+      const TypedArray = {
+        5121: Uint8Array, 5123: Uint16Array, 5125: Uint32Array, 5126: Float32Array,
+      }[acc.componentType];
+      if (!TypedArray || !typeLength || !Number.isInteger(acc.count) || acc.count < 1) {
+        throw new Error('Tipe accessor GLB tidak didukung.');
+      }
+      const bufferView = json.bufferViews[acc.bufferView];
+      const itemBytes = typeLength * TypedArray.BYTES_PER_ELEMENT;
+      if (bufferView.byteStride && bufferView.byteStride !== itemBytes) {
+        throw new Error('Stride akses GLB tidak didukung.');
+      }
+      const [viewStart, viewEnd] = sliceView(acc.bufferView);
+      const from = viewStart + (acc.byteOffset || 0);
+      const to = from + itemBytes * acc.count;
+      if (to > viewEnd) throw new Error('Accessor GLB terpotong.');
+      return { data: new TypedArray(data.slice(from, to)), size: typeLength };
+    }
+    const rootNode = json.nodes?.find(node => Number.isInteger(node.mesh));
+    const primitive = json.meshes?.[rootNode?.mesh]?.primitives?.[0];
+    if (!primitive || primitive.attributes?.POSITION === undefined) {
+      throw new Error('Mesh utama GLB tidak ditemukan.');
+    }
+    const geometry = new THREE.BufferGeometry();
+    for (const [semantic, name] of [
+      ['POSITION', 'position'], ['NORMAL', 'normal'], ['TEXCOORD_0', 'uv'],
+    ]) {
+      if (primitive.attributes[semantic] !== undefined) {
+        const attr = accessor(primitive.attributes[semantic]);
+        geometry.setAttribute(name, new THREE.BufferAttribute(attr.data, attr.size));
+      }
+    }
+    if (primitive.indices !== undefined) {
+      const idx = accessor(primitive.indices);
+      geometry.setIndex(new THREE.BufferAttribute(idx.data, idx.size));
+    }
+    if (!geometry.hasAttribute('normal')) geometry.computeVertexNormals();
+    const material = new THREE.MeshStandardMaterial({
+      color: 0xffffff, roughness: .78, metalness: .05,
+      side: THREE.DoubleSide,
+    });
+    const mesh = new THREE.Mesh(geometry, material);
+    if (rootNode.translation) mesh.position.fromArray(rootNode.translation);
+    if (rootNode.rotation) mesh.quaternion.fromArray(rootNode.rotation);
+    if (rootNode.scale) mesh.scale.fromArray(rootNode.scale);
+    const asset = new THREE.Group();
+    asset.add(mesh);
+
+    // Embedded texture is optional: the character stays visible even when
+    // a mobile browser cannot decode one of its glTF material textures.
+    const pbr = json.materials?.[primitive.material]?.pbrMetallicRoughness;
+    const texInfo = pbr?.baseColorTexture;
+    const image = json.images?.[json.textures?.[texInfo?.index]?.source];
+    if (image && Number.isInteger(image.bufferView) &&
+      typeof URL.createObjectURL === 'function') {
+      const [start, end] = sliceView(image.bufferView);
+      const blobUrl = URL.createObjectURL(new Blob([data.slice(start, end)], {
+        type: image.mimeType || 'image/jpeg',
+      }));
+      new THREE.TextureLoader().load(blobUrl, function (map) {
+        URL.revokeObjectURL(blobUrl);
+        map.encoding = THREE.sRGBEncoding;
+        material.map = map;
+        material.needsUpdate = true;
+      }, undefined, function (error) {
+        URL.revokeObjectURL(blobUrl);
+        reportModel('custom', 'Karakter tampil tanpa tekstur warna.', error);
+      });
+    }
+    return { scene: asset, animations: [] };
+  }
+
+  async function recoverCustomGlb(primaryError) {
+    reportModel('recovering', 'Mencoba decoder alternatif GLB.', primaryError);
+    try {
+      const response = await fetch(CUSTOM_MODEL_PATH, { cache: 'no-store' });
+      if (!response.ok) throw new Error('HTTP ' + response.status);
+      const backupGltf = decodeBasicGlb(await response.arrayBuffer());
+      usedBasicGlbLoader = true;
+      onCharacterLoaded(backupGltf, true);
+    } catch (fallbackError) {
+      usedBasicGlbLoader = false;
+      reportModel('error', 'Decoder GLB alternatif juga gagal.', fallbackError);
+      loadLegacyCharacter();
+    }
   }
 
   function loadLegacyCharacter() {
@@ -407,12 +543,10 @@
     } catch (error) {
       if (character) scene.remove(character);
       character = null;
-      reportModel('error', 'Model GLB gagal dirender.', error);
-      loadLegacyCharacter();
+      recoverCustomGlb(error);
     }
   }, undefined, function (error) {
-    reportModel('error', 'Model GLB gagal diunduh atau diproses.', error);
-    loadLegacyCharacter();
+    recoverCustomGlb(error);
   });
 
   let frameHandle = 0, lastFrame = 0;

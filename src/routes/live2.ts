@@ -11,7 +11,7 @@ export function live2OverlayPage(): string {
 <link rel="stylesheet" href="/live2.css?v=20261009-2">
 <script src="/vendor/three.r146.min.js" defer></script>
 <script src="/vendor/GLTFLoader.r146.js" defer></script>
-<script src="/live2.js?v=20261009-2" defer></script>
+<script src="/live2.js?v=20261009-3" defer></script>
 </head>
 <body>
 <main class="live2" id="live2" aria-label="Overlay ramalan tarot TikTok Live">
