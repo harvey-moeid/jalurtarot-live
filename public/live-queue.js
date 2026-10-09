@@ -39,6 +39,10 @@
         }
         if (payload.item && (!Number.isSafeInteger(payload.item.seq) ||
           !['gift','like'].includes(payload.item.kind))) throw new Error('Invalid LIVE item');
+        // A response started before an ACK may arrive afterwards.
+        if (payload.item && cursor && payload.item.seq <= cursor[payload.item.kind]) {
+          return { ...payload, item:null };
+        }
         return payload;
       } finally { clearTimeout(timer); }
     }
