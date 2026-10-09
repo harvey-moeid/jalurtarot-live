@@ -59,7 +59,7 @@ class FakeSql {
 }
 function harness() {
   const js = ts.transpileModule(serverCode,{compilerOptions:{
-    target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS,
+    target:9,module:1, // ES2022 / CommonJS: TS 7 omits legacy runtime enum exports
   }}).outputText;
   const exports = {};
   const policy = (before,after,milestone) => Number.isSafeInteger(before)&&
