@@ -26,7 +26,7 @@ class FakeSql {
     } else if (query.startsWith('insert into processed_events')) {
       assert.equal(this.processed.has(a[0]),false,'duplicate event key');
       this.processed.set(a[0],a[1]);
-    } else if (query.startsWith('select count from room_likes')) {
+    } else if (query.startsWith('select count,updated_at from room_likes')) {
       if(this.counts.has(a[0])) rows=[{count:this.counts.get(a[0]).count,updated_at:this.counts.get(a[0]).updated_at}];
     } else if (query.startsWith('insert into room_likes')) {
       this.counts.set(a[0],{count:a[1],updated_at:a[2]});
