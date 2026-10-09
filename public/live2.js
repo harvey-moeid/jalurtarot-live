@@ -1,4 +1,4 @@
-/* LIVE 2: realtime tarot, no API keys in browser. WebGL 3D host drawn locally. */
+/* LIVE 2: secure tarot state and illustrated host; legacy 3D is opt-in. */
 (function () {
   'use strict';
 
@@ -98,6 +98,7 @@
     activeUntil = 0;
     speakingUntil = 0;
     speech.classList.remove('talking');
+    document.querySelector?.('.host')?.classList.remove('is-reading');
     speechTitle.textContent = 'Selamat datang di LIVE ✨';
     speechMessage.textContent = 'Kirim gift atau kumpulkan like untuk membuka pesan dari kartu tarot.';
     document.getElementById('viewer-label').textContent = 'Menanti energi baik...';
@@ -125,6 +126,7 @@
     speechMessage.textContent = brief(message, 115);
     speakingUntil = Date.now() + Math.min(16_000, Math.max(3800, message.length * 80));
     speech.classList.add('talking');
+    document.querySelector?.('.host')?.classList.add('is-reading');
     document.getElementById('reading-name').textContent = 'Untuk ' + username;
     document.getElementById('reading-summary').textContent = message;
     document.getElementById('viewer-label').textContent = username + ' · ' + (isLike ? 'Terima kasih untuk like!' : 'Terima kasih sudah hadir!');
@@ -222,6 +224,26 @@
   if (demo) present(demoDraw);
   else schedule(0);
 
+
+  // By default show the approved illustrated character: browser-safe, transparent,
+  // no GPU, texture decoding or mobile WebGL dependency. The legacy GLB viewer
+  // remains available on demand with ?character=glb for development/debugging.
+  const portrait = document.getElementById('host-portrait');
+  const useGlb = query.get('character') === 'glb' || !portrait;
+  if (!useGlb) {
+    const host = document.querySelector('.host');
+    host?.classList.add('is-illustrated');
+    portrait.addEventListener('load', function () {
+      if (portrait.naturalWidth) reportModel('illustrated', 'Karakter Jalur Tarot siap.');
+    });
+    portrait.addEventListener('error', function () {
+      reportModel('error', 'Gambar karakter gagal dimuat. Periksa file publik host.');
+      overlay.classList.add('portrait-error');
+    });
+    if (portrait.complete && portrait.naturalWidth) reportModel('illustrated', 'Karakter Jalur Tarot siap.');
+    return;
+  }
+  portrait?.setAttribute('hidden', '');
 
   // GLB character rendered with locally vendored Three.js r146 and GLTFLoader.
   // Never load third-party code or textures from a CDN at streaming time.
@@ -383,7 +405,7 @@
       mixer.clipAction(gltf.animations[0]).play();
     }
     refreshHeldCard();
-    document.querySelector('.host')?.classList.add('is-loaded');
+    document.querySelector?.('.host')?.classList.add('is-loaded');
     resize();
     renderFrame(0);
     reportModel(custom ? 'custom' : 'legacy',
@@ -608,7 +630,7 @@
   canvas.addEventListener('webglcontextlost', function (event) {
     event.preventDefault();
     cancelAnimationFrame(frameHandle);
-    document.querySelector('.host')?.classList.remove('is-loaded');
+    document.querySelector?.('.host')?.classList.remove('is-loaded');
     reportModel('error', 'Konteks WebGL hilang.');
     overlay.classList.add('no-webgl');
   });

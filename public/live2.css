@@ -155,3 +155,24 @@ body{touch-action:manipulation}
   padding:7px 10px;border:1px solid rgba(255,229,187,.8);
   border-radius:11px;background:rgba(21,8,39,.94);color:#ffe5ba;
   font-size:clamp(10px,1.8vw,15px);line-height:1.35;overflow-wrap:anywhere}
+
+
+/* Approved illustrated host (default). Keeps the original GLB behind ?character=glb.
+   The asset is a transparent SVG rather than a broken white/untextured GLB. */
+.host__portrait{position:absolute;z-index:2;display:block;right:6%;bottom:2%;
+  width:auto;height:100%;max-width:88%;max-height:100%;object-fit:contain;
+  transform-origin:50% 90%;filter:drop-shadow(0 14px 20px rgba(14,2,28,.7));
+  animation:illustrated-idle 5.2s ease-in-out infinite;pointer-events:none}
+.host.is-illustrated canvas{display:none}
+.host.is-illustrated .host__fallback{display:none}
+.host.is-reading .host__portrait{animation:illustrated-reading 2.7s ease-in-out infinite}
+.portrait-error .host__portrait{display:none}
+.portrait-error .host__fallback{display:block}
+@keyframes illustrated-idle{0%,100%{transform:translateY(0) rotate(-.8deg)}50%{transform:translateY(-10px) rotate(.7deg)}}
+@keyframes illustrated-reading{0%,100%{transform:translateY(0) rotate(-.8deg) scale(1)}50%{transform:translateY(-8px) rotate(1.2deg) scale(1.023)}}
+@media(min-aspect-ratio:1/1){
+  .host{top:14%;right:0;width:55%;height:73%}
+  .host__portrait{height:90%;right:7%;bottom:9%}
+}
+@media(max-height:680px){.host__portrait{height:98%;bottom:1%}}
+@media(prefers-reduced-motion:reduce){.host__portrait{animation:none!important}}

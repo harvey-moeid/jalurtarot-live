@@ -200,6 +200,14 @@ mungkin membutuhkan waktu singkat untuk propagasi antar lokasi Cloudflare.
   dihapus karena tidak pernah dipakai untuk menolak request publik maupun ramalan statis;
   Banner dipertahankan karena `/api/banner` dibaca oleh homepage.
 
+
+### Karakter utama LIVE 2 (9 Oktober 2026)
+
+- Default memakai ilustrasi karakter bergaya 3D hasil desain khusus Jalur Tarot, disimpan sebagai SVG transparan `public/models/jalur-tarot-host.svg`. Fokus pada wajah, ekspresi, aksesori bulan, dan kartu tarot seperti mockup yang disetujui.
+- Tampilan host memiliki idle floating/tilt serta respons halus ketika gift/like memicu pembacaan; `prefers-reduced-motion` dihormati. Ini animasi ilustrasi 2.5D, **bukan rig 3D/lip-sync**.
+- Model GLB asli tidak dihapus dan hanya diaktifkan dengan `/live2?character=glb&debug=1` untuk diagnosis. Mode default menghindari masalah tekstur putih/WebGL di OBS dan ponsel.
+- LIVE 1, API state, pengaturan gift/like, dan webhook tetap tidak berubah. Untuk uji visual buka `/live2?demo=1&background=1`, refresh OBS Browser Source setelah deploy.
+
 ### LIVE 2 — overlay portrait 3D bergerak
 
 URL OBS Browser Source baru (LIVE 1 tetap di `/live`):

@@ -8,10 +8,10 @@ export function live2OverlayPage(): string {
 <meta name="theme-color" content="#110b20">
 <meta name="color-scheme" content="dark">
 <title>Jalur Tarot — LIVE 2 Magical Host</title>
-<link rel="stylesheet" href="/live2.css?v=20261009-2">
+<link rel="stylesheet" href="/live2.css?v=20261009-4">
 <script src="/vendor/three.r146.min.js" defer></script>
 <script src="/vendor/GLTFLoader.r146.js" defer></script>
-<script src="/live2.js?v=20261009-3" defer></script>
+<script src="/live2.js?v=20261009-4" defer></script>
 </head>
 <body>
 <main class="live2" id="live2" aria-label="Overlay ramalan tarot TikTok Live">
@@ -23,7 +23,8 @@ export function live2OverlayPage(): string {
   <div class="stardust" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
   <section class="host" aria-label="Host tarot 3D">
     <div class="host__halo" aria-hidden="true"></div>
-    <canvas id="host3d" aria-label="Karakter pembaca tarot tiga dimensi yang bergerak"></canvas>
+    <img id="host-portrait" class="host__portrait" src="/models/jalur-tarot-host.svg?v=20261009-1" width="680" height="750" alt="Karakter Jalur Tarot bergaya fantasi 3D memegang kartu tarot" fetchpriority="high" decoding="async">
+    <canvas id="host3d" aria-label="Mode eksperimental model tiga dimensi Jalur Tarot"></canvas>
     <div class="host__debug" id="host-model-debug" role="status" aria-live="polite" hidden></div>
     <div class="host__fallback" aria-hidden="true">🔮<span>✦</span></div>
     <div class="host__name">✦ JALUR TAROT ✦</div>
