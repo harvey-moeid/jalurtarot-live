@@ -50,7 +50,7 @@
   let speechLines = [];
   let speechIndex = 0;
   // Leave time for each thought instead of truncating every reading at 45s.
-  const MAX_READING_MS = 105_000;
+  const MAX_READING_MS = 130_000;
   const END_HOLD_MS = 6_000;
   const POLL_INTERVAL_MS = 1200;
   const MAX_CLIENT_AGE_MS = 120_000;
@@ -79,24 +79,36 @@
     return Date.now() < speakingUntil;
   }
 
-  // Split thoughts at sentence/word boundaries to keep the bubble legible.
+  // Display a short paragraph instead of one sentence per page.
+  // A compact portrait source gets slightly shorter paragraphs to avoid clipping.
+  // The narration is bounded by utteranceFor(), never by an external event field.
   function splitSpeech(message) {
+    const width = Number(window.innerWidth) || 1080;
+    const maxChars = width < 390 ? 148 : width < 520 ? 164 : 185;
+    const minChars = Math.round(maxChars * .69);
     const words = safeText(message, 650).replace(/\s+/g, ' ').trim().split(/\s+/).filter(Boolean);
-    const lines = [];
-    let line = '';
+    const pages = [];
+    let page = '';
     for (const word of words) {
-      if (line && line.length + word.length + 1 > 88) {
-        lines.push(line);
-        line = '';
+      // Avoid text leaking out of the bubble on unbroken usernames or URLs.
+      if (word.length > maxChars) {
+        if (page) { pages.push(page); page = ''; }
+        for (let at = 0; at < word.length; at += maxChars) pages.push(word.slice(at, at + maxChars));
+        continue;
       }
-      line += (line ? ' ' : '') + word;
-      if (/[.!?…]["'”’)]?$/.test(word) && line.length >= 32) {
-        lines.push(line);
-        line = '';
+      if (page && page.length + word.length + 1 > maxChars) {
+        pages.push(page);
+        page = '';
+      }
+      page += (page ? ' ' : '') + word;
+      // Combine several sentences until a paragraph is substantial.
+      if (page.length >= minChars && /[.!?…]["'”’)]?$/.test(word)) {
+        pages.push(page);
+        page = '';
       }
     }
-    if (line) lines.push(line);
-    return lines.length ? lines : ['Mari kita lihat pesan kartumu hari ini.'];
+    if (page) pages.push(page);
+    return pages.length ? pages : ['Mari kita lihat pesan kartumu hari ini.'];
   }
 
   function say(text, onDone) {
@@ -155,7 +167,7 @@
     void speechMessage.offsetWidth; // Restart the entrance animation for each line.
     speechMessage.classList.add('is-appearing');
     speech.classList.add('talking');
-    const duration = Math.max(2_400, Math.min(8_200, line.length * 70 + 450));
+    const duration = Math.max(4_500, Math.min(11_500, line.length * 65 + 600));
     speakingUntil = Date.now() + duration;
 
     let ended = false;
@@ -167,7 +179,7 @@
     }
     const voiced = say(line, advance);
     // Watchdog prevents broken speech engines from locking the bubble forever.
-    speechTimer = setTimeout(advance, voiced ? Math.min(18_000, Math.max(9_500, duration * 2)) : duration);
+    speechTimer = setTimeout(advance, voiced ? Math.min(25_000, Math.max(11_000, line.length * 140)) : duration);
   }
 
   function stopReading() {
@@ -203,7 +215,7 @@
     const message = utteranceFor(draw);
     const isLike = draw.triggerType === 'like';
     const giftName = safeText(draw.giftName, 80);
-    // A shorter bubble protects the character; the reading panel keeps the full message.
+    // Grouped dialogue uses fewer bubbles; the result panel retains a short summary.
     const topics = { cinta: 'Cinta', karir: 'Karier', nasib: 'Nasib' };
     const titleTopic = topics[draw.topic];
     speechTitle.textContent = titleTopic
