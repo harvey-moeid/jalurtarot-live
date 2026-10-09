@@ -47,6 +47,7 @@
   let polling = false;
   let pollTimer = 0;
   let closeTimer = 0;
+  let maxReadingTimer = 0;
   let speechTimer = 0;
   let speechToken = 0;
   let speechLines = [];
@@ -140,6 +141,7 @@
     ++speechToken; // Invalidates old timers and stale utterance callbacks.
     clearTimeout(speechTimer);
     clearTimeout(closeTimer);
+    clearTimeout(maxReadingTimer);
     speechLines = [];
     speechIndex = 0;
     speakingUntil = 0;
@@ -264,7 +266,7 @@
     reading.hidden = false;
     status.textContent = 'Ramalan baru untuk ' + username + ': ' + message;
     clearTimeout(closeTimer);
-    closeTimer = setTimeout(function () { if (activeId === id) stopReading(); }, MAX_READING_MS);
+    maxReadingTimer = setTimeout(function () { if (activeId === id) stopReading(); }, MAX_READING_MS);
     showNextLine(speechToken);
   }
 
