@@ -77,7 +77,7 @@ function harness() {
     const response=await server.fetch(new Request('https://queue.internal'+path,{
       method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body),
     }));
-    assert.equal(response.ok,true,await response.text());
+    if (!response.ok) throw new Error('Queue request failed: '+await response.text());
     return response.json();
   }
   const now=Date.now();
