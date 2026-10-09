@@ -284,7 +284,17 @@ Tambahkan **Browser Source** di OBS, arahkan ke:
 ```
 https://livejalur.muidsoft.com/live
 ```
-Background transparan, resolusi 1920×1080.
+LIVE 1 kini otomatis responsif untuk Browser Source OBS **portrait 1080×1920** maupun **landscape 1920×1080**. Canvas transparan saat tidak ada ramalan; begitu bacaan dipicu, desain latar ungu gelap dan panel beraksen emas tampil selama 45 detik. Gunakan `?background=1` untuk gradasi latar penuh saat sedang ada bacaan.
+
+**Preview LIVE 1 (tidak memanggil webhook, tidak menyimpan draw ke KV):**
+- 3 kartu topik cinta: `https://livejalur.muidsoft.com/live?demo=1&background=1&topic=cinta`
+- 1 kartu topik karier: `https://livejalur.muidsoft.com/live?demo=1&background=1&topic=karir&spread=single`
+- 3 kartu topik nasib: `https://livejalur.muidsoft.com/live?demo=1&background=1&topic=nasib`
+- Diagnostik polling: `/live?debug=1` (tampil di browser/OBS, jangan untuk siaran biasa).
+
+Kartu dan bacaan dipisah: **portrait** menampilkan kartu di atas dan teks di bawah, sedangkan **landscape** menampilkan kartu di kiri dan teks di kanan. Narasi humanis mengikuti topik komentar, ditampilkan utuh dalam panel yang **dapat digulir manual** dan **bergulir otomatis selama 45 detik** jika melebihi tinggi viewport. Preferensi reduce-motion akan mematikan autoscroll. Input dari komentar, nama, dan gift dirender sebagai teks bukan HTML; kartu memakai aset lokal yang dibatasi ke `/cards/`.
+
+File tampilan LIVE 1 dipisahkan menjadi `public/live1.css` dan `public/live1.js`. `/live` memakai `Cache-Control: no-store` dan query versi untuk meminimalkan cache usang di OBS. Setelah deploy, klik **Refresh cache of current page** pada Browser Source OBS. LIVE 2, webhook TikTok, dan aturan gift/like tetap tidak diubah.
 
 Untuk uji coba tanpa live TikTok beneran, buka `/admin/live` — ada tombol test draw manual dan pengaturan gift/like.
 
