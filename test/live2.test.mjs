@@ -264,7 +264,8 @@ test('alternative GLB decoder recovers uploaded model if primary loader fails', 
   };
   assert.doesNotThrow(() => vm.runInNewContext(src, fake, { timeout: 2000 }));
   await new Promise(resolve => setImmediate(resolve));
-  assert.equal(elements.get('live2').attrs['data-model-state'], 'custom');
+  assert.equal(elements.get('live2').attrs['data-model-state'], 'custom',
+    elements.get('host-model-debug').textContent);
   assert.match(elements.get('host-model-debug').textContent, /renderer alternatif/);
   const host = sceneModels.find(model => model && model.name === 'TarotHost');
   assert.ok(host, 'decoded model is added to the Three.js scene');
