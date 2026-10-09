@@ -147,6 +147,11 @@ live.get('/queue', async (c) => {
     return c.json({ error:'Cursor antrean tidak valid' },400);
   }
   try {
+    // Overlay polling still drives the existing REST connector fallback when
+    // webhook delivery is unavailable; DO protects against duplicate events.
+    try { await syncRecentConnectorEvents(c.env); } catch (error) {
+      console.warn('Queue connector fallback unavailable', error);
+    }
     const cursor:LiveQueueCursor={gift,like,giftsStreak:streak};
     const result=await nextQueuedReading(c.env,cursor,bootstrap);
     c.header('Cache-Control','no-store');
