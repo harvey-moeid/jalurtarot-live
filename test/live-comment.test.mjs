@@ -69,12 +69,13 @@ test('drop stale, anonymous, irrelevant and malformed topic comments', async () 
 });
 
 test('connector guards draw generation behind gift/like and exposes optional narration metadata', async () => {
-  const [connector, live, route, overlay, admin] = await Promise.all([
+  const [connector, live, route, overlay, admin, queue] = await Promise.all([
     readFile(new URL('../src/lib/tiktokConnector.ts', import.meta.url), 'utf8'),
     readFile(new URL('../src/lib/live.ts', import.meta.url), 'utf8'),
     readFile(new URL('../src/routes/live.ts', import.meta.url), 'utf8'),
     readFile(new URL('../public/live2.js', import.meta.url), 'utf8'),
     readFile(new URL('../src/routes/admin.ts', import.meta.url), 'utf8'),
+    readFile(new URL('../src/lib/liveQueueObject.ts', import.meta.url), 'utf8'),
   ]);
   const chatAt = connector.indexOf("if (eventType === 'chat')");
   const giftAt = connector.indexOf("if (!settings.giftEnabled)");
@@ -84,7 +85,8 @@ test('connector guards draw generation behind gift/like and exposes optional nar
   assert.doesNotMatch(chatBlock, /generateLiveDraw/);
   assert.match(connector, /selectLiveComment\(env,/);
   assert.match(connector, /markLiveCommentRead\(env,/);
-  assert.match(connector, /crossedLikeMilestone\(before, count, milestone\)/);
+  assert.match(queue, /crossedLikeMilestone\(before,count,body\.milestone\)/);
+  assert.match(connector, /processQueuedLikes\(env,/);
   assert.match(route, /getConnectorEvents\(env, 'chat,gift,like', 100\)/);
   assert.match(live, /topic === 'cinta' \? 'hubungan' : topic === 'karir' \? 'karir' : 'nasib'/);
   assert.match(live, /narration:|narration,/);
