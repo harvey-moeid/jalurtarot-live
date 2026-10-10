@@ -13,6 +13,7 @@ export function live2OverlayPage(): string {
 <script src="/vendor/three.r146.min.js" defer></script>
 <script src="/vendor/GLTFLoader.r146.js" defer></script>
 <script src="/live-queue.js?v=20261010-1" defer></script>
+<script src="/live-audio.js?v=20261010-1" defer></script>
 <script src="/live2.js?v=20261010-3" defer></script>
 <script src="/overlay-fullscreen.js?v=20261009-1" defer></script>
 </head>
