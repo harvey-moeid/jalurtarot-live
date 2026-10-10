@@ -9,7 +9,7 @@
   const reducedMotion = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
   const $ = id => document.getElementById(id);
   const stage = $('stage');
-  const audio = window.LiveAudio ? window.LiveAudio.create('live1') : null;
+  const audio = typeof window !== 'undefined' && window.LiveAudio ? window.LiveAudio.create('live1') : null;
   const soundToggle = $('sound-toggle');
   let soundState = audio ? audio.isEnabled() : false;
   let narrationId = 0;
