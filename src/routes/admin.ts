@@ -839,8 +839,8 @@ admin.get('/audio', async (c) => {
   };
   const toggle = (name: string, label: string) => '<label style="display:flex;gap:.65rem;align-items:center;"><input type="checkbox" name="' + name
     + '" ' + mark(a[name]) + '/> ' + label + '</label>';
-  const content = \`
-    \${msg ? '<div class="alert alert-' + status + '">' + esc(msg) + '</div>' : ''}
+  const content = `
+    ${msg ? '<div class="alert alert-' + status + '">' + esc(msg) + '</div>' : ''}
     <div class="card" style="border-color:var(--gold-dim)">
       <div class="card-title">🔊 Pengaturan Audio &amp; TTS</div>
       <p style="font-size:13px;line-height:1.7;color:var(--text-dim);margin-bottom:1rem">
@@ -849,27 +849,27 @@ admin.get('/audio', async (c) => {
       </p>
       <form method="POST" action="/admin/audio/settings">
         <div class="form-row">
-          \${toggle('live1Tts', 'Aktifkan pembaca ramalan LIVE 1')}
-          \${toggle('live2Tts', 'Aktifkan pembaca ramalan LIVE 2')}
+          ${toggle('live1Tts', 'Aktifkan pembaca ramalan LIVE 1')}
+          ${toggle('live2Tts', 'Aktifkan pembaca ramalan LIVE 2')}
           <small style="color:var(--text-dim)">Bacaan otomatis setelah gift/target like. ?voice=1 memaksa ON; ?voice=0 memaksa OFF untuk URL OBS tersebut. Gunakan URL biasa agar mengikuti admin.</small>
         </div>
         <div class="form-row">
           <label for="voice">Jenis suara</label>
           <select name="voice" id="voice">
-            <option value="female" \${a.voice === 'female' ? 'selected' : ''}>Prioritaskan suara perempuan Indonesia</option>
-            <option value="default" \${a.voice === 'default' ? 'selected' : ''}>Suara Indonesia default browser</option>
+            <option value="female" ${a.voice === 'female' ? 'selected' : ''}>Prioritaskan suara perempuan Indonesia</option>
+            <option value="default" ${a.voice === 'default' ? 'selected' : ''}>Suara Indonesia default browser</option>
           </select>
           <small style="color:var(--text-dim)">Pilihan suara tergantung TTS yang terpasang di perangkat/OBS; tidak selalu tersedia suara perempuan.</small>
-          \${field('rate')}\${field('pitch')}\${field('volume')}
+          ${field('rate')}${field('pitch')}${field('volume')}
           <button class="btn btn-ghost" id="test-voice" type="button">▶ Tes suara di browser admin</button>
         </div>
         <hr style="border:0;border-top:1px solid var(--border);margin:1.25rem 0;"/>
         <div class="form-row">
-          \${toggle('giftSound', 'Efek suara saat gift diterima')}
-          \${toggle('likeSound', 'Efek suara saat target like tercapai')}
-          \${field('sfxVolume')}
-          \${toggle('ambient', 'Latar magis ambient sintetis (tanpa file musik)')}
-          \${field('ambientVolume')}
+          ${toggle('giftSound', 'Efek suara saat gift diterima')}
+          ${toggle('likeSound', 'Efek suara saat target like tercapai')}
+          ${field('sfxVolume')}
+          ${toggle('ambient', 'Latar magis ambient sintetis (tanpa file musik)')}
+          ${field('ambientVolume')}
           <small style="color:var(--text-dim)">OBS dapat memblokir autoplay. Gunakan tombol suara di overlay dan aktifkan Control audio via OBS. Suara ambient dan efek dibuat secara lokal menggunakan Web Audio.</small>
         </div>
         <button type="submit" class="btn btn-primary">Simpan Pengaturan Audio</button>
@@ -896,7 +896,7 @@ admin.get('/audio', async (c) => {
         if (preferred || voices[0]) sample.voice = preferred || voices[0];
         speechSynthesis.speak(sample);
       };
-    </script>\`;
+    </script>`;
   return c.html(adminShell('Audio & TTS', content, 'audio'));
 });
 
