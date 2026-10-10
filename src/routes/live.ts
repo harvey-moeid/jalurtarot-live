@@ -1,4 +1,5 @@
 import { Hono } from 'hono';
+import { DEFAULT_LIVE_AUDIO, getLiveAudioSettings } from '../lib/liveAudioSettings';
 import type { Env as ApiEnv } from './api';
 import { isAuthenticated } from '../middleware/adminAuth';
 import { generateLiveDraw, getLiveDraw, saveLiveDraw, type LiveSpreadId } from '../lib/live';
@@ -165,6 +166,15 @@ live.get('/queue', async (c) => {
 // GET /api/live/state
 // Polled by the OBS/browser overlay. A lightweight connector sync is used as a
 // fallback when webhook delivery has not been configured yet.
+live.get('/audio-settings', async (c) => {
+  c.header('Cache-Control', 'no-store');
+  try { return c.json(await getLiveAudioSettings(c.env)); }
+  catch (error) {
+    console.warn('Audio config unavailable, using safe defaults', error);
+    return c.json({ ...DEFAULT_LIVE_AUDIO });
+  }
+});
+
 live.get('/state', async (c) => {
   try { await syncRecentConnectorEvents(c.env); } catch {}
   const draw = await getLiveDraw(c.env);
@@ -190,6 +200,7 @@ export function liveOverlayPage(): string {
 <link rel="stylesheet" href="/live1.css?v=20261010-1">
 <link rel="stylesheet" href="/overlay-fullscreen.css?v=20261009-1">
 <script src="/live-queue.js?v=20261010-1" defer></script>
+<script src="/live-audio.js?v=20261010-1" defer></script>
 <script src="/live1.js?v=20261010-2" defer></script>
 <script src="/overlay-fullscreen.js?v=20261009-1" defer></script>
 </head>
@@ -257,6 +268,7 @@ export function liveOverlayPage(): string {
     <small>Gift atau target like membuka bacaan berikutnya</small>
   </footer>
 </main>
+<button id="sound-toggle" type="button" hidden aria-pressed="false" aria-label="Atur suara TTS" style="position:fixed;top:12px;right:12px;z-index:9999;border:1px solid #c8a84b;border-radius:18px;padding:8px 12px;color:#fff;background:#32194b;cursor:pointer">🔊 Suara aktif</button>
 <div class="debug-state" id="debug-state" role="status" hidden></div>
 <div class="overlay-fullscreen-control" id="overlay-fullscreen-control">
   <button class="overlay-fullscreen-button" id="overlay-fullscreen-button" type="button" aria-label="Masuk layar penuh" aria-pressed="false" title="Masuk layar penuh"><span class="overlay-fullscreen-icon" aria-hidden="true">⛶</span><span class="overlay-fullscreen-label">Layar Penuh</span></button>
