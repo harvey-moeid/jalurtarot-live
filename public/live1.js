@@ -9,6 +9,10 @@
   const reducedMotion = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
   const $ = id => document.getElementById(id);
   const stage = $('stage');
+  const audio = typeof window !== 'undefined' && window.LiveAudio ? window.LiveAudio.create('live1') : null;
+  const soundToggle = $('sound-toggle');
+  let soundState = audio ? audio.isEnabled() : false;
+  let narrationId = 0;
   // Fallback legacy polling only if queue asset failed to load.
   const queue = typeof window !== 'undefined' && window.LiveReadingQueue
     ? window.LiveReadingQueue.connect('live1') : null;
@@ -102,6 +106,8 @@
     scrollTimer = null;
   }
   function returnToIdle() {
+    ++narrationId;
+    if (audio) audio.cancel();
     stage.classList.remove('show');
     stopScroll();
     if (idle && idleEnabled) idle.hidden = false;
@@ -110,6 +116,34 @@
       activeQueueItem = null;
       schedule(0);
     }
+  }
+  function scheduleAudioNarration() {
+    const id = ++narrationId;
+    if (audio) audio.cancel();
+    if (hideTimer !== null) clearTimeout(hideTimer);
+    // Keep the voice playing until it finishes, capped to avoid blocking the queue.
+    const voiced = audio && audio.isEnabled() && audio.speak(summary.textContent, function () {
+      if (id !== narrationId || demo || !stage.classList.contains('show')) return;
+      if (hideTimer !== null) clearTimeout(hideTimer);
+      hideTimer = setTimeout(returnToIdle, 1200);
+    });
+    if (!demo) hideTimer = setTimeout(returnToIdle, voiced ? 130_000 : HIDE_AFTER_MS);
+  }
+  if (audio && soundToggle) {
+    soundToggle.hidden = false;
+    const reflect = function () {
+      const enabled = audio.isEnabled();
+      soundToggle.textContent = enabled ? '🔊 Suara aktif' : '🔇 Suara mati';
+      soundToggle.setAttribute('aria-pressed', String(enabled));
+      if (enabled !== soundState && stage.classList.contains('show')) scheduleAudioNarration();
+      soundState = enabled;
+    };
+    audio.onChange(reflect);
+    reflect();
+    soundToggle.addEventListener('click', function () {
+      audio.setEnabled(!audio.isEnabled());
+      audio.unlock();
+    });
   }
   function startScroll() {
     stopScroll();
@@ -171,10 +205,8 @@
     void stage.offsetWidth;
     stage.classList.add('show');
     startScroll();
-    if (hideTimer !== null) clearTimeout(hideTimer);
-    if (!demo) {
-      hideTimer = setTimeout(returnToIdle, HIDE_AFTER_MS);
-    }
+    if (audio) audio.playEvent(draw.triggerType);
+    scheduleAudioNarration();
     setDebug('Menampilkan hasil ' + trimText(draw.id || 'baru', 90));
   }
   function schedule(ms) {
@@ -256,6 +288,7 @@
     };
   }
   document.addEventListener('visibilitychange', function () {
+    if (document.hidden && audio) audio.cancel();
     if (!document.hidden && !demo) schedule(0);
   });
   if (demo) {

@@ -5,6 +5,7 @@
   const query = new URLSearchParams(location.search);
   const demo = query.get('demo') === '1';
   const soundWanted = query.get('voice') === '1';
+  const audio = window.LiveAudio ? window.LiveAudio.create('live2') : null;
   const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
   const overlay = document.getElementById('live2');
   const queue = window.LiveReadingQueue ? window.LiveReadingQueue.connect('live2') : null;
@@ -115,6 +116,7 @@
   }
 
   function say(text, onDone) {
+    if (audio) return audio.speak(text, onDone);
     if (!voiceEnabled || !('speechSynthesis' in window) ||
         typeof SpeechSynthesisUtterance !== 'function') return false;
     try {
@@ -146,7 +148,8 @@
     speechIndex = 0;
     speakingUntil = 0;
     speech.classList.remove('talking');
-    try { if ('speechSynthesis' in window) speechSynthesis.cancel(); } catch (_) {}
+    if (audio) audio.cancel();
+    else try { if ('speechSynthesis' in window) speechSynthesis.cancel(); } catch (_) {}
   }
 
   function showNextLine(token) {
@@ -264,6 +267,7 @@
     });
 
     reading.hidden = false;
+    if (audio) audio.playEvent(draw.triggerType);
     status.textContent = 'Ramalan baru untuk ' + username + ': ' + message;
     clearTimeout(closeTimer);
     maxReadingTimer = setTimeout(function () { if (activeId === id) stopReading(); }, MAX_READING_MS);
@@ -334,7 +338,29 @@
     pollTimer = setTimeout(poll, delay);
   }
 
-  if (soundWanted) {
+  if (audio && soundToggle) {
+    soundToggle.hidden = false;
+    const reflect = function () {
+      const was = voiceEnabled;
+      voiceEnabled = audio.isEnabled();
+      soundToggle.textContent = voiceEnabled ? '🔊 Suara aktif' : '🔇 Suara mati';
+      soundToggle.setAttribute('aria-pressed', String(voiceEnabled));
+      if (was !== voiceEnabled && activeId !== null && speechLines.length) {
+        // Immediately replay the current bubble when switching modes.
+        speechIndex = Math.max(0, speechIndex - 1);
+        ++speechToken;
+        clearTimeout(speechTimer);
+        audio.cancel();
+        showNextLine(speechToken);
+      }
+    };
+    audio.onChange(reflect);
+    reflect();
+    soundToggle.onclick = function () {
+      audio.setEnabled(!audio.isEnabled());
+      audio.unlock();
+    };
+  } else if (soundWanted) {
     if ('speechSynthesis' in window) {
       soundToggle.hidden = false;
       soundToggle.textContent = '🔊 Suara aktif';

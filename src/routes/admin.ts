@@ -3,6 +3,7 @@ import { Hono } from 'hono';
 import { generateLiveDraw, saveLiveDraw, getLiveDraw, type LiveSpreadId } from '../lib/live';
 import { connectorConfigured, getConnectorStatus } from '../lib/tiktokConnector';
 import { getLiveSettings, parseLiveSettingsForm, saveLiveSettings } from '../lib/liveSettings';
+import { getLiveAudioSettings, parseLiveAudioForm, saveLiveAudioSettings } from '../lib/liveAudioSettings';
 
 import type { AdminEnv } from '../middleware/adminAuth';
 import { adminAuth, getAdminPassword, isAuthenticated, isLoginRateLimited, recordFailedLogin, clearLoginFailures, createAdminSession, destroyAdminSession, ADMIN_SESSION_TTL_SECONDS } from '../middleware/adminAuth';
@@ -64,6 +65,7 @@ function esc(str: string | undefined | null): string {
 function adminShell(title: string, content: string, activePage: string = ''): string {
   const nav = [
     { href: '/admin/live', label: '[live] Live', id: 'live' },
+    { href: '/admin/audio', label: '[audio] Audio & TTS', id: 'audio' },
     { href: '/admin/banner', label: '[banner] Banner', id: 'banner' },
   ];
 
@@ -788,7 +790,7 @@ admin.get('/live', async (c) => {
     </div>
 
     <div class="card">
-      <div class="card-title">Overlay OBS</div>
+      <div class="card-title">Overlay OBS</div><p style="margin:10px 0"><a href="/admin/audio" class="btn btn-primary">🔊 Pengaturan Audio &amp; TTS</a></p>
       <p style="font-size:13px;color:var(--text-dim);margin-bottom:0.75rem;">Browser Source tetap memakai overlay yang sama dan otomatis membaca draw terbaru.</p>
       <div class="form-row"><input type="text" readonly value="${esc(overlayUrl)}" style="flex:1;min-width:260px;" onclick="this.select()"/><a href="/live" target="_blank" class="btn">-> Buka Overlay</a></div>
     </div>
@@ -811,6 +813,103 @@ admin.get('/live', async (c) => {
     </div>
   `;
   return c.html(adminShell('Ramalan Live', content, 'live'));
+});
+
+// Audio panel: same authenticated admin middleware as all other routes.
+admin.get('/audio', async (c) => {
+  let a;
+  try { a = await getLiveAudioSettings(c.env); }
+  catch (e: any) {
+    return c.html(adminShell('Audio & TTS', '<div class="alert alert-error">' + esc(String(e?.message || e)) + '</div>', 'audio'), 503);
+  }
+  const msg = c.req.query('msg');
+  const status = c.req.query('type') === 'error' ? 'error' : 'success';
+  const mark = (b: boolean) => b ? 'checked' : '';
+  const controls = [
+    { id: 'rate', label: 'Kecepatan suara (0.5–1.5)', min: '0.5', max: '1.5' },
+    { id: 'pitch', label: 'Pitch suara (0.5–1.8)', min: '0.5', max: '1.8' },
+    { id: 'volume', label: 'Volume TTS (0–1)', min: '0', max: '1' },
+    { id: 'sfxVolume', label: 'Volume efek (0–1)', min: '0', max: '1' },
+    { id: 'ambientVolume', label: 'Volume latar (0–0.35)', min: '0', max: '0.35' },
+  ];
+  const field = (id: string) => {
+    const x = controls.find(x => x.id === id)!;
+    return '<label for="' + id + '">' + x.label + '</label><input id="' + id + '" name="' + id
+      + '" type="number" required step="0.01" min="' + x.min + '" max="' + x.max + '" value="' + a[id] + '"/>';
+  };
+  const toggle = (name: string, label: string) => '<label style="display:flex;gap:.65rem;align-items:center;"><input type="checkbox" name="' + name
+    + '" ' + mark(a[name]) + '/> ' + label + '</label>';
+  const content = `
+    ${msg ? '<div class="alert alert-' + status + '">' + esc(msg) + '</div>' : ''}
+    <div class="card" style="border-color:var(--gold-dim)">
+      <div class="card-title">🔊 Pengaturan Audio &amp; TTS</div>
+      <p style="font-size:13px;line-height:1.7;color:var(--text-dim);margin-bottom:1rem">
+        Berlaku untuk LIVE 1 dan LIVE 2. Disimpan di Cloudflare KV; OBS menyegarkan pengaturan otomatis
+        sekitar 30 detik sekali (propagasi antar lokasi bisa lebih lama). Tidak membutuhkan API key TTS.
+      </p>
+      <form method="POST" action="/admin/audio/settings">
+        <div class="form-row">
+          ${toggle('live1Tts', 'Aktifkan pembaca ramalan LIVE 1')}
+          ${toggle('live2Tts', 'Aktifkan pembaca ramalan LIVE 2')}
+          <small style="color:var(--text-dim)">Bacaan otomatis setelah gift/target like. ?voice=1 memaksa ON; ?voice=0 memaksa OFF untuk URL OBS tersebut. Gunakan URL biasa agar mengikuti admin.</small>
+        </div>
+        <div class="form-row">
+          <label for="voice">Jenis suara</label>
+          <select name="voice" id="voice">
+            <option value="female" ${a.voice === 'female' ? 'selected' : ''}>Prioritaskan suara perempuan Indonesia</option>
+            <option value="default" ${a.voice === 'default' ? 'selected' : ''}>Suara Indonesia default browser</option>
+          </select>
+          <small style="color:var(--text-dim)">Pilihan suara tergantung TTS yang terpasang di perangkat/OBS; tidak selalu tersedia suara perempuan.</small>
+          ${field('rate')}${field('pitch')}${field('volume')}
+          <button class="btn btn-ghost" id="test-voice" type="button">▶ Tes suara di browser admin</button>
+        </div>
+        <hr style="border:0;border-top:1px solid var(--border);margin:1.25rem 0;"/>
+        <div class="form-row">
+          ${toggle('giftSound', 'Efek suara saat gift diterima')}
+          ${toggle('likeSound', 'Efek suara saat target like tercapai')}
+          ${field('sfxVolume')}
+          ${toggle('ambient', 'Latar magis ambient sintetis (tanpa file musik)')}
+          ${field('ambientVolume')}
+          <small style="color:var(--text-dim)">OBS dapat memblokir autoplay. Gunakan tombol suara di overlay dan aktifkan Control audio via OBS. Suara ambient dan efek dibuat secara lokal menggunakan Web Audio.</small>
+        </div>
+        <button type="submit" class="btn btn-primary">Simpan Pengaturan Audio</button>
+      </form>
+    </div>
+    <div class="card">
+      <div class="card-title">Preview &amp; URL OBS</div>
+      <div class="form-row"><label>LIVE 1</label><input readonly value="/live" onclick="this.select()"/><a href="/live?demo=1" target="_blank" rel="noopener" class="btn">Preview</a></div>
+      <div class="form-row"><label>LIVE 2</label><input readonly value="/live2" onclick="this.select()"/><a href="/live2?demo=1" target="_blank" rel="noopener" class="btn">Preview</a></div>
+    </div>
+    <script>
+      document.getElementById('test-voice').onclick = function () {
+        if (!('speechSynthesis' in window)) { alert('TTS tidak didukung browser.'); return; }
+        speechSynthesis.cancel();
+        var sample = new SpeechSynthesisUtterance('Halo, selamat datang di Jalur Tarot. Mari kita lihat pesan kartu hari ini.');
+        sample.lang = 'id-ID';
+        sample.rate = Number(document.getElementById('rate').value);
+        sample.pitch = Number(document.getElementById('pitch').value);
+        sample.volume = Number(document.getElementById('volume').value);
+        var voices = speechSynthesis.getVoices().filter(function (v) { return /^id[-_]/i.test(v.lang); });
+        var preferred = document.getElementById('voice').value === 'female' ? voices.find(function (v) {
+          return /female|wanita|perempuan|gadis|damayanti|dewi|siti|google bahasa indonesia/i.test(v.name);
+        }) : null;
+        if (preferred || voices[0]) sample.voice = preferred || voices[0];
+        speechSynthesis.speak(sample);
+      };
+    </script>`;
+  return c.html(adminShell('Audio & TTS', content, 'audio'));
+});
+
+admin.post('/audio/settings', async (c) => {
+  const origin = c.req.header('Origin');
+  if (!origin || origin !== new URL(c.req.url).origin) return c.text('Origin tidak diizinkan.', 403);
+  try {
+    const form = await c.req.parseBody();
+    await saveLiveAudioSettings(c.env, parseLiveAudioForm(form as Record<string, unknown>));
+    return c.redirect('/admin/audio?msg=Pengaturan+audio+berhasil+disimpan&type=success', 303);
+  } catch (e: any) {
+    return c.redirect('/admin/audio?type=error&msg=' + encodeURIComponent(String(e?.message || e).slice(0, 160)), 303);
+  }
 });
 
 admin.post('/live/settings', async (c) => {
