@@ -471,3 +471,13 @@ Tiga gaya interpretasi untuk `/reading` & `/daily` (Ramalan Live selalu memakai 
 ## Lisensi
 
 Private / internal project — tidak ada lisensi open-source publik saat ini.
+
+
+### Admin Audio & TTS untuk LIVE 1 dan LIVE 2 (10 Oktober 2026)
+
+- Masuk ke **/admin/audio** lewat sidebar admin atau tombol dari **/admin/live**.
+- Aktifkan TTS LIVE 1 dan/atau LIVE 2; pilih suara Indonesia (prioritas perempuan jika tersedia), kecepatan, nada, volume, efek gift, efek milestone like, dan ambient magis sintetis. Klik **Tes suara di browser admin** untuk mengecek TTS lokal sebelum menyimpan.
+- Semua preferensi disimpan sebagai JSON di Cloudflare **RATE_LIMIT_KV** pada kunci `live:audio:settings:v1`. Tidak ada D1, token TTS, musik eksternal, atau migrasi. Browser Source mengambil konfigurasi publik yang terfilter dari **GET /api/live/audio-settings**, dengan fallback aman saat KV tidak tersedia dan refresh sekitar 30 detik saat overlay terlihat; propagasi KV antar lokasi mungkin lebih lama.
+- Untuk mengikuti admin, gunakan **/live** dan **/live2** biasa di OBS. **?voice=1** memaksa TTS aktif dan **?voice=0** memaksa nonaktif pada Browser Source itu (kompatibilitas link lama). Tombol suara overlay mengganti TTS secara lokal sampai halaman dimuat ulang. Efek suara gift/like berasal dari peristiwa yang diproses oleh overlay; tidak diputar pada komentar tanpa trigger.
+- Suara dan ambient dibuat lokal dengan Web Speech API/Web Audio API; dukungan suara perempuan dan otomatisasi OBS bergantung pada perangkat/browser. Nyalakan **Control audio via OBS**, refresh cache Browser Source setelah deploy dan, jika browser memblokir autoplay, klik tombol suara di overlay untuk mengizinkan audio. Suara ambient adalah pad synthesizer, bukan file lagu.
+- LIVE 1 tetap memakai durasi teks 45 detik **ketika TTS mati**. Saat TTS aktif, pembacaan selesai setelah narasi suara tuntas, dengan batas pengaman 130 detik. LIVE 2 mempertahankan dialog per-bubble dan watchdog ketika voice engine gagal merespons. Kedua overlay tetap memakai antrean LIVE independen.
